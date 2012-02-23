@@ -1,0 +1,155 @@
+<html>
+  <head>
+    <title>noirMon</title>
+    <meta charset="utf-8">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+  </head>
+
+  <body>
+    <button id="getmondata">Refresh Data</button>
+    <input type="checkbox" id="periodic" >Enable periodic 2 seconds refresh</input>
+    <button id="dojvmgc" style="margin-left:25px;" >Force JVM GC</button>
+     
+    <br></br>
+    <p>Clojure Noir Server Montoring Data (raw JMX and derived) </p>
+
+    <table id="dataTree"
+             border="0" 
+             style="margin-left:30px;" 
+             cellpadding="0"  cellspacing="0" width = "200px">  
+      <thead></thead>
+      <tbody class="tdata">
+      </tbody>
+    </table>
+    
+    <script>
+  
+    // commands
+    var cmdGetMonData = {cmd: "get-mon-data"};
+    var cmdDoJvmGc = {cmd: "do-jvm-gc"};
+    
+    var flagPeriodic = false;
+    var lastAjaxRequestTime = 0;
+         
+    $(document).ready(function() {
+   
+      $("#getmondata").click(clickGetMonData);
+      $("#dojvmgc").click(clickDoJvmGc);    
+  
+      // initial refresh     
+      clickGetMonData();
+    
+     // periodic checkbox handling
+      $('#periodic').bind('change', function () {
+        if ($(this).is(':checked')) {
+          flagPeriodic = true;
+          periodicGetMonData();
+          $("#getmondata").attr("disabled", true);
+        } else {
+          flagPeriodic = false;
+          $("#getmondata").attr("disabled", false);
+        }
+      });
+      
+    });
+   
+    function clickGetMonData() {
+      doAjaxCmd(cmdGetMonData);
+    }
+    
+    function getMsec() {
+      return new Date().getTime();
+    }
+    
+    function periodicGetMonData() {
+      if (!flagPeriodic)
+        return;   
+      var delta = getMsec() - lastAjaxRequestTime;   
+      if ( delta > 2000)
+        clickGetMonData();
+      setTimeout(periodicGetMonData, 2000);  // issue periodic request every 2 seconds if enabled
+    }
+    
+    function clickDoJvmGc() {
+      $("#dojvmgc").attr("disabled", true); // isable button until cmd is executed
+      doAjaxCmd(cmdDoJvmGc);
+    }
+  
+    function doAjaxCmd(request) {
+      
+      // use inner function to be able to refer to original request in closure
+      var respCallback = function ( jdata) {
+        var cmd = request["cmd"];
+        switch (cmd) {
+          case "get-mon-data":
+            jsonToTable(jdata);
+            break;
+          case "do-jvm-gc":
+            $("#dojvmgc").attr("disabled", false); // re-enable button on cmd ack 
+            clickGetMonData(); // refresh monitoring data
+            break;
+        }
+      }
+      
+      lastAjaxRequestTime = getMsec();
+      $.ajax("/admin/moncmd", 
+        {
+          data: request,    // JSON encoded request
+          type: "GET", 
+          dataType: "json",
+          contentType: "application/json",
+          success: respCallback
+        });
+    }
+        
+    function isObject ( obj ) {
+      return obj && (typeof obj  === "object");
+    }
+
+    function makeRow(ident, name, val) {
+      var s = "<tr>",
+      align ,
+      style ,
+      vstyle ;
+      
+      if (val === "") {
+        align = ' align="center"';
+        style = ' style="background:#F5F51D"';
+        vstyle = style; 
+      } else {
+        align = ' align="right"';
+        style = ' style="background:#BAF7C3"';
+        vstyle = ' style="background:#B5F2F5"';
+      }        
+      for (var i = 0; i < ident; i++) {
+          s += "<td></td>";
+      }
+      s += "<td"+align+style+">"+name+
+           ":</td><td align=right"+vstyle+">"+val+"</td></tr/>";
+      return s;
+    }
+    
+    function makeTbl(s, jdata, ident) {
+      for (name in jdata) {
+        var val = jdata[name];
+        if (!isObject(val))
+          s += makeRow(ident, name, val);
+        else {
+          s += makeRow(ident, name, "");
+          s += makeTbl("", val, ident+1);
+        }
+      }
+      return s;
+    }
+    
+    function jsonToTable(jdata) {
+      $(".tdata").empty();
+      var s= makeTbl("", jdata, 0);
+      $(".tdata").append(s);
+    }
+   
+    </script>
+	  
+	 
+  </body>
+</html>
