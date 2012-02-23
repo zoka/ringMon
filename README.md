@@ -15,7 +15,7 @@ Note that for real life application such a page should be protected by admin acc
 be used to inflict some serious DOS damage to your server.
 
 The code is ready made to be deployed on Heroku - you can see it see it in action 
-[here](http:/http://noirmon.herokuapp.com/).
+[here](http://noirmon.herokuapp.com/).
 
 ## Usage
 
