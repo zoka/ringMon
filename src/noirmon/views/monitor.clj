@@ -5,7 +5,10 @@
   (:use [noir.core :only [defpage]]))
 
 
-(def cpu-load (atom 0.0))
+(def cpu-load      (atom 0.0))
+(def ajax-reqs-ps  (atom 0.0))     ; ajax requests per second
+(def ajax-reqs-tot (atom 0))     ; total requests
+  
 (def ^:const sample-interval 2000) ; msec
 
 (defn get-process-nanos []
@@ -14,37 +17,47 @@
 (defn calc-cpu-load [cpu-time clock-time]
   (/ (* 100.0 cpu-time) clock-time))
 
-(defn cpu-load-sampler []
+(defn data-sampler []
   (loop [process-nanos     (get-process-nanos)
          real-nanos        (System/nanoTime)
+         ajax-reqs         @ajax-reqs-tot
          old-process-nanos 0
-         old-real-nanos    0]
+         old-real-nanos    0
+         old-ajax-reqs     0]
 
          (Thread/sleep sample-interval)
          (reset! cpu-load 
                  (calc-cpu-load
                    (- process-nanos old-process-nanos)
                    (- real-nanos old-real-nanos)))
+         
+         (reset! ajax-reqs-ps 
+                 (/ (- ajax-reqs old-ajax-reqs) 2.0))
+      
          (recur (get-process-nanos)
                 (System/nanoTime)
+                @ajax-reqs-tot
                 process-nanos
-                real-nanos)))
+                real-nanos
+                ajax-reqs)))
 
 (defn init []
-  ; kick off endless cpu-sampler thread
+  ; kick off endless data-sampler thread
   ; has to be called from noirmon.server/-main
-  (.start (Thread. cpu-load-sampler)))
-
-; return CPU load in JMX format (as a map)
-(defn get-cpu-load[]
-  {:CpuLoad (format "%5.2f%%" @cpu-load) })
+  (.start (Thread. data-sampler)))
 
 (defn get-mon-data []
-    (let [cpu (get-cpu-load)
-          os  (jmx/mbean "java.lang:type=OperatingSystem")
+    (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
           mem (jmx/mbean "java.lang:type=Memory")
           th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)]
-          {:Application cpu :OperatingSystem os :Memory mem :Threading th}))
+          
+          {:Application   
+              {:CpuLoad         (format "%5.2f%%" @cpu-load)
+               :AjaxReqsTotal   @ajax-reqs-tot 
+               :AjaxReqsPerSec  (format "%7.2f" @ajax-reqs-ps)}
+           :OperatingSystem os 
+           :Memory          mem 
+           :Threading       th}))
   
 (defn do-jvm-gc []
   (jmx/invoke "java.lang:type=Memory" :gc)
@@ -52,6 +65,7 @@
 
 (defn decode-cmd [request]
   (let [cmd (keyword (:cmd request))]
+    (swap! ajax-reqs-tot inc)  
     (case cmd
       :get-mon-data (get-mon-data)
       :do-jvm-gc (do-jvm-gc)

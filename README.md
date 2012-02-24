@@ -2,8 +2,9 @@
 
 A simple single page website written for Noir clojure  webframework. It demonstrates how to
 add monitoring admin page that displays raw JMX data of interest. The page also
-displays one derived value: CpuLoad that is calculated by sampling OperatingSystem.ProcessCpuTime every
-2 seconds. Monitoring data in JSON form is fetched from Noir server app either periodically or at user request.
+displays one derived value such as CpuLoad that is calculated by sampling OperatingSystem.ProcessCpuTime every
+2 seconds and AJAX requests statistics. 
+Monitoring data in JSON form is fetched from Noir server app either periodically or at user request.
 It is also possible to force JVM garbage collection. Rapid pressing on "Force JVM GC" button will cause
 considerable server side CPU load.
 
