@@ -11,6 +11,7 @@
 (defn init []
   (let [srv     (server/start-server :port 0)
         port    (.getLocalPort (:ss @srv))]
+        (println "nrepl port" port)
         (reset! nserver srv)
         (reset! nport port)))
 
@@ -19,7 +20,7 @@
 
 ;; transient session
 (defn handle-transient [req]
-  (when-not @nport
+  (when (= @nport 0)
     (init))
   (with-open [conn (repl/connect :port @nport)]
      (-> (repl/client conn 5000) 
