@@ -46,7 +46,7 @@
   ; kick off endless data-sampler thread
   ; has to be called from noirmon.server/-main
   (.start (Thread. data-sampler))
-  (repl/init )) ; init nrepl  
+  ) ; init nrepl  
    
 
 (defn get-mon-data []
