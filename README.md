@@ -1,6 +1,6 @@
 # noirMon
 
-A simple single page website written for Noir clojure  webframework. It demonstrates how to
+A simple single page website written for Noir clojure  web framework. It demonstrates how to
 add monitoring admin page that displays raw JMX data of interest. The page also
 displays one derived value such as CpuLoad that is calculated by sampling OperatingSystem.ProcessCpuTime every
 2 seconds and AJAX requests statistics. 

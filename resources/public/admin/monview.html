@@ -3,6 +3,12 @@
     <title>noirMon</title>
     <meta charset="utf-8">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    
+    <script src="/js/codemirror-compressed.js"></script>
+    <link rel="stylesheet" href="/css/codemirror.css">
+    <style> .CodeMirror { border: 1px solid black; }</style>
+  
+</head> 
   </head>
 
   <body>
@@ -28,17 +34,37 @@
       </tbody>
     </table>
     
+    <span>REPL output</span>
+    <textarea id="ClojOut">
+    </textarea>
+    <span>REPL input. Ctrl-Enter to submit the current buffer. 
+          Ctrl-Up and Ctrl-Down to browse history.
+          Ctrl-Home to erase REPL area. Ctrl-End to erase history.</span>
+    <textarea id="Cloj">
+    </textarea>  
+    
     <script>
   
-    // commands
+    // simple commands
     var cmdGetMonData = {cmd: "get-mon-data"};
     var cmdDoJvmGc = {cmd: "do-jvm-gc"};
     
     var flagPeriodic = false;
     var lastAjaxRequestTime = 0;
-         
+    
+    var replIn, replOut;
+    var replHist = [];
+    var nextHistNdx = 0;
+    var ndxHist = 0;
+    
+    var annMonData = {}; // annotated JSON of monitoring data, add __hidden: true
+                         // into object data to colapse it in display
+    
+
     $(document).ready(function() {
-   
+      // executed upon page load
+      
+      // button handlers
       $("#getmondata").click(clickGetMonData);
       $("#dojvmgc").click(clickDoJvmGc);    
   
@@ -46,7 +72,7 @@
       clickGetMonData();
     
      // periodic checkbox handling
-      $('#periodic').bind('change', function () {
+      $('#periodic').on('change', function () {
         if ($(this).is(':checked')) {
           flagPeriodic = true;
           periodicGetMonData();
@@ -57,7 +83,113 @@
         }
       });
       
+      initEditor();   
     });
+    
+
+    
+    function replSubmit(e) {
+      if (e != replIn)
+        return;
+      var b = e.getValue();     
+      b = $.trim(b);
+      if (b == "")
+        return;     // nothing to do
+      
+      b = b+"\n";    
+      doAjaxCmd ( 
+        {
+          cmd: "do-repl",
+          code: b
+        });
+      e.setValue("");
+      replHist [nextHistNdx++] = b;
+      ndxHist = nextHistNdx; // history pointer past freshest item
+    }
+    
+    function bufferEnd(e) {
+      e.setSelection(
+      {
+        line:e.lineCount()-1
+      }, null,!0);
+    }
+    
+    function appendBuffer(e, s) {
+      bufferEnd(e);
+      e.replaceSelection(s);
+      bufferEnd(e);
+    }
+    
+    function restoreBuffer(e, b) {
+      b = $.trim(b); 
+      e.setValue(b);
+      bufferEnd(e); // restore cursor at the end of last line
+    }
+    
+    function histBack(e) {
+      if (e != replIn)
+        return;
+      if (ndxHist > 0) {
+        ndxHist--;
+        if (ndxHist < nextHistNdx) {
+          var b = replHist[ndxHist];
+          restoreBuffer(e,b);
+        }
+      }
+    }
+    
+    function histFwd(e) {
+      if (e != replIn)
+        return;
+      if (ndxHist < nextHistNdx) {
+        ndxHist++;
+        if (ndxHist < nextHistNdx) {
+          var b = replHist[ndxHist];
+          restoreBuffer(e,b);
+        } else 
+          e.setValue("");
+      }
+    }
+    
+    function clearEditor() {
+      if (e != replIn)
+        return;
+      ndxHist = nextHistNdx;      
+      replOut.setValue("");
+      replIn.setValue("");     
+    }
+    
+    function clearHistory() {
+      if (e != replIn)
+        return;
+      ndxHist = nextHistNdx = 0;
+      replIn.setValue("");
+    }
+ 
+    function initEditor() {
+      replOut = CodeMirror.fromTextArea(document.getElementById('ClojOut'),
+        {
+          matchBrackets: true,
+          mode: "text/x-clojure",
+          readOnly:true
+        });
+      
+      replIn = CodeMirror.fromTextArea(document.getElementById('Cloj'),
+        {
+          lineNumbers: true,
+          matchBrackets: true,
+          mode: "text/x-clojure"
+        });
+      
+      replOut.setValue("");
+      replIn.setValue("");
+      
+      CodeMirror.keyMap.default["Ctrl-Enter"] = replSubmit;
+      CodeMirror.keyMap.default["Ctrl-Up"]    = histBack;
+      CodeMirror.keyMap.default["Ctrl-Down"]  = histFwd;
+      CodeMirror.keyMap.default["Ctrl-Home"]  = clearEditor;
+      CodeMirror.keyMap.default["Ctrl-End"]   = clearHistory;
+    }
    
     function clickGetMonData() {
       doAjaxCmd(cmdGetMonData);
@@ -77,12 +209,23 @@
     }
     
     function clickDoJvmGc() {
-      $("#dojvmgc").attr("disabled", true); // isable button until cmd is executed
+      $("#dojvmgc").attr("disabled", true); // disable button until GC is executed
       doAjaxCmd(cmdDoJvmGc);
     }
   
-    function doAjaxCmd(request) {
-      
+    function respDoRepl(code, jdata) {
+      var s = code;
+      for (obj in jdata) {
+        var val = jdata[obj];
+        if ("out" in val)
+          s += val["out"] + "\n";
+        if ("value" in val)
+          s += val["value"] + "\n";
+      }
+      appendBuffer(replOut,s);
+    }
+    
+    function doAjaxCmd(request) {     
       // use inner function to be able to refer to original request in closure
       var respCallback = function ( jdata) {
         var cmd = request["cmd"];
@@ -93,6 +236,9 @@
           case "do-jvm-gc":
             $("#dojvmgc").attr("disabled", false); // re-enable button on cmd ack 
             clickGetMonData(); // refresh monitoring data
+            break;
+          case "do-repl":
+            respDoRepl(request["code"], jdata); 
             break;
         }
       }
@@ -111,47 +257,141 @@
     function isObject ( obj ) {
       return obj && (typeof obj  === "object");
     }
+    
+    // search json object jobj for the first instance of 
+    // object named objname and 
+    // then set its property named "__hidden" to val
+    function annSetHidden(jobj, objname, val) {     
+      for (var name in jobj) {
+        var v = jobj[name];
+        if (isObject(v)) {
+          if (name == objname) {
+            v["__hidden"] = val;
+            return;
+          } else
+            annSetHidden(v, objname,val)
+        }
+      }
+    }
+    
+    function attachHideHandler (id) {
+      $("[id="+id+"]").on("change", function(event) {
+        var nameCell, name;
+  
+        nameCell = event.target.parentElement.nextSibling.nextSibling;
+        name = nameCell.textContent;
+        name = name.slice(0, name.length - 1); // remove ":" at the end
+        if ($(this).is(':checked')) 
+          annSetHidden(annMonData, name, false);
+        else
+          annSetHidden(annMonData, name,  true);
+        jsonToTable(annMonData);     
+      });
+    }
 
-    function makeRow(ident, name, val) {
+    function makeRow(ident, name, val, hidden) {
       var s = "<tr>",
       align ,
       style ,
-      vstyle ;
+      vstyle,
+      hChk = "",     // hide check box markup
+      chkState = "",
+      hdr = false,   // true for header row
+      hdrPad;       // markup for padding cell to align checkboxes properly
       
-      if (val === "") {
-        align = ' align="center"';
+      if (val === "") 
+        hdr = true;
+  
+      if (hdr) {
+        align = ' align="left"';
         style = ' style="background:#F5F51D"';
-        vstyle = style; 
+        vstyle = style
+        
+        if (!hidden) 
+          chkState  = 'checked="yes"';
+        hChk = '<input type="checkbox" id="hide"'+chkState+"></input>";
       } else {
         align = ' align="right"';
         style = ' style="background:#BAF7C3"';
         vstyle = ' style="background:#B5F2F5"';
-      }        
+      }
+
+      if (hdr) {
+        hdrPad = "<td"+style+"></td>";
+      } else {
+        hdrPad  = "";  
+      }
+      
       for (var i = 0; i < ident; i++) {
           s += "<td></td>";
       }
-      s += "<td"+align+style+">"+name+
+      s += "<td>"+hChk+hdrPad+"</td><td"+align+style+">"+name+
            ":</td><td align=right"+vstyle+">"+val+"</td></tr/>";
       return s;
     }
     
     function makeTbl(s, jdata, ident) {
-      for (name in jdata) {
+      for (var name in jdata) {
         var val = jdata[name];
-        if (!isObject(val))
-          s += makeRow(ident, name, val);
-        else {
-          s += makeRow(ident, name, "");
-          s += makeTbl("", val, ident+1);
+        if (!isObject(val)) {
+          if (name != "__hidden")  // do not show hidden field, it is only for internal use
+            s += makeRow(ident, name, val, false);
+        }  else {
+          var hidden = false;
+          if ("__hidden" in val) 
+            hidden = val["__hidden"];
+            
+          s += makeRow(ident, name, "", hidden);
+          if (!hidden)
+            s += makeTbl("", val, ident+1);
         }
       }
       return s;
     }
     
+    function isEmpty(obj) {
+      for(var i in obj) 
+        return false;
+      return true;
+    }
+
+    
+    function annotateJson(fresh, ann) {
+      var init = false;
+      var firstobj = false;
+      if (isEmpty (ann)) {
+        // initial update set all hidden except first one
+        init = true;
+        firstobj = true;
+      }
+      
+      for (var name in fresh) {
+        var val = fresh[name];
+        if (isObject (val)) {
+          if (!(name in ann) ) {
+            ann[name]= fresh[name]; 
+            if (init) {
+              if (firstobj) {
+                ann[name]["__hidden"] = false;
+                firstobj = false;
+              } else
+                ann[name]["__hidden"] = true;
+            }
+          } else
+            annotateJson(val, ann[name]);
+          } else {
+          ann[name] = fresh[name]; // fresh data value
+        }
+      }
+    }
+    
     function jsonToTable(jdata) {
+      annotateJson(jdata, annMonData); // uppdate annotated data
+                                       // preserving hidden fields, if any
       $(".tdata").empty();
-      var s= makeTbl("", jdata, 0);
+      var s= makeTbl("", annMonData, 0);
       $(".tdata").append(s);
+      attachHideHandler("hide");
     }
    
     </script>

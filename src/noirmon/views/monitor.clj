@@ -1,6 +1,7 @@
 (ns noirmon.views.monitor
   (:require [noir.response :as resp]
             [noir.request :as req]
+            [noirmon.models.nrepl :as repl]
             [clojure.java.jmx :as jmx])
   (:use [noir.core :only [defpage]]))
 
@@ -44,24 +45,32 @@
 (defn init []
   ; kick off endless data-sampler thread
   ; has to be called from noirmon.server/-main
-  (.start (Thread. data-sampler)))
+  (.start (Thread. data-sampler))
+  (repl/init )) ; init nrepl  
+   
 
 (defn get-mon-data []
-    (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
-          mem (jmx/mbean "java.lang:type=Memory")
-          th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)]
-          
-          {:Application   
-              {:CpuLoad         (format "%5.2f%%" @cpu-load)
-               :AjaxReqsTotal   @ajax-reqs-tot 
-               :AjaxReqsPerSec  (format "%7.2f" @ajax-reqs-ps)}
-           :OperatingSystem os 
-           :Memory          mem 
-           :Threading       th}))
-  
+  (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
+        mem (jmx/mbean "java.lang:type=Memory")
+        ; java.jmx returns Java arrays which repl/json can not handle
+        ; and thread id values are not interesting anyway
+        th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)]
+        
+        {:Application   
+          {:CpuLoad         (format "%5.2f%%" @cpu-load)
+          :AjaxReqsTotal   @ajax-reqs-tot 
+          :AjaxReqsPerSec  (format "%7.2f" @ajax-reqs-ps)}
+          :OperatingSystem os 
+          :Memory          mem
+          :Threading       th}))
+
 (defn do-jvm-gc []
   (jmx/invoke "java.lang:type=Memory" :gc)
   {:resp "ok"})
+
+(defn do-repl [code]
+  (let [r (repl/handle-transient {:op :eval :code code})] 
+    r))
 
 (defn decode-cmd [request]
   (let [cmd (keyword (:cmd request))]
@@ -69,6 +78,7 @@
     (case cmd
       :get-mon-data (get-mon-data)
       :do-jvm-gc (do-jvm-gc)
+      :do-repl (do-repl (:code request))
       {:resp "bad-cmd"})))
 
 
