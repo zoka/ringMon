@@ -182,7 +182,7 @@
         });
       
       replOut.setValue("");
-      replIn.setValue('(println ("hello world") ; REPL will not work on Heroku for now');
+      replIn.setValue('(println (+ 40 2))');
       
       CodeMirror.keyMap.default["Ctrl-Enter"] = replSubmit;
       CodeMirror.keyMap.default["Ctrl-Up"]    = histBack;

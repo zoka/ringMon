@@ -69,7 +69,8 @@
   {:resp "ok"})
 
 (defn do-repl [code]
-  (let [r (repl/handle-transient {:op :eval :code code})] 
+  (let [r (repl/handle-transient {:op "eval" :code code})] 
+    (println "do-repl:" r)
     r))
 
 (defn decode-cmd [request]
