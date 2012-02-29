@@ -83,7 +83,8 @@
         }
       });
       
-      initEditor();   
+      initEditor();
+       $('#periodic').trigger('click'); // periodic update on
     });
     
 
@@ -151,7 +152,7 @@
       }
     }
     
-    function clearEditor() {
+    function clearEditor(e) {
       if (e != replIn)
         return;
       ndxHist = nextHistNdx;      
@@ -159,7 +160,7 @@
       replIn.setValue("");     
     }
     
-    function clearHistory() {
+    function clearHistory(e) {
       if (e != replIn)
         return;
       ndxHist = nextHistNdx = 0;
