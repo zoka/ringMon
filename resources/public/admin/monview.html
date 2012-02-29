@@ -131,6 +131,14 @@
       if (e != replIn)
         return;
       if (ndxHist > 0) {
+        if (ndxHist == nextHistNdx) {
+          var b = e.getValue();     
+          b = $.trim(b);
+          if (b != "") {
+            // preserve current buffer if not empty
+            replHist[nextHistNdx++] = b;
+          }
+        }
         ndxHist--;
         if (ndxHist < nextHistNdx) {
           var b = replHist[ndxHist];
