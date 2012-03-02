@@ -2,75 +2,76 @@
   <head>
     <title>noirMon</title>
     <meta charset="utf-8">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
-    
+    <script src="/js/jquery-1.7.1.min.js"></script>
+
+
     <script src="/js/codemirror-compressed.js"></script>
     <link rel="stylesheet" href="/css/codemirror.css">
     <style> .CodeMirror { border: 1px solid black; }</style>
-  
-</head> 
+
+</head>
   </head>
 
   <body>
     <button id="getmondata">Refresh Data</button>
     <input type="checkbox" id="periodic" >Enable periodic 2 seconds refresh</input>
     <button id="dojvmgc" style="margin-left:25px;" >Force JVM GC</button>
-     
+
     <br></br>
-    <p> 
-        <a href="http://webnoir.org/">Noir</a> (web framework written in  
+    <p>
+        <a href="http://webnoir.org/">Noir</a> (web framework written in
         <a href="http://clojure.org/">Clojure</a>)
-        server app montoring demo (raw JMX and derived data). 
+        server app montoring demo (raw JMX and derived data).
         Get code at
         <a href="https://github.com/zoka/noirMon/">GitHub</a>.
     </p>
 
     <table id="dataTree"
-             border="0" 
-             style="margin-left:30px;" 
-             cellpadding="0"  cellspacing="0" width = "200px">  
+             border="0"
+             style="margin-left:30px;"
+             cellpadding="0"  cellspacing="0" width = "200px">
       <thead></thead>
       <tbody class="tdata">
       </tbody>
     </table>
-    
+
     <span>REPL output</span>
     <textarea id="ClojOut">
     </textarea>
-    <span>REPL input. Ctrl-Enter to submit the current buffer. 
+    <span>REPL input. Ctrl-Enter to submit the current buffer.
           Ctrl-Up and Ctrl-Down to browse history.
           Ctrl-Home to erase REPL area. Ctrl-End to erase history.</span>
     <textarea id="Cloj">
-    </textarea>  
-    
+    </textarea>
+
     <script>
-  
+
     // simple commands
     var cmdGetMonData = {cmd: "get-mon-data"};
     var cmdDoJvmGc = {cmd: "do-jvm-gc"};
-    
+
     var flagPeriodic = false;
     var lastAjaxRequestTime = 0;
-    
+
     var replIn, replOut;
     var replHist = [];
     var nextHistNdx = 0;
     var ndxHist = 0;
-    
+
     var annMonData = {}; // annotated JSON of monitoring data, add __hidden: true
                          // into object data to colapse it in display
-    
+
 
     $(document).ready(function() {
       // executed upon page load
-      
+
       // button handlers
       $("#getmondata").click(clickGetMonData);
-      $("#dojvmgc").click(clickDoJvmGc);    
-  
-      // initial refresh     
+      $("#dojvmgc").click(clickDoJvmGc);
+
+      // initial refresh
       clickGetMonData();
-    
+
      // periodic checkbox handling
       $('#periodic').on('change', function () {
         if ($(this).is(':checked')) {
@@ -82,21 +83,31 @@
           $("#getmondata").attr("disabled", false);
         }
       });
-      
+
       initEditor();
        $('#periodic').trigger('click'); // periodic update on
     });
-        
+
+    function replRefresh(){
+      // same c ommand, but empty code buffer
+      // means  we just want refresh for long repl output
+      // should not be needed when we get WebSockets
+      doAjaxCmd (
+        {
+          cmd: "do-repl",
+          code: ""
+        });
+    }
+
     function replSubmit(e) {
       if (e != replIn)
         return;
-      var b = e.getValue();     
+      var b = e.getValue();
       b = $.trim(b);
       if (b == "")
         return;     // nothing to do
-      
-      b = b+"\n";    
-      doAjaxCmd ( 
+
+      doAjaxCmd (
         {
           cmd: "do-repl",
           code: b
@@ -105,32 +116,32 @@
       replHist [nextHistNdx++] = b;
       ndxHist = nextHistNdx; // history pointer past freshest item
     }
-    
+
     function bufferEnd(e) {
       e.setSelection(
       {
         line:e.lineCount()-1
       }, null,!0);
     }
-    
+
     function appendBuffer(e, s) {
       bufferEnd(e);
       e.replaceSelection(s);
       bufferEnd(e);
     }
-    
+
     function restoreBuffer(e, b) {
-      b = $.trim(b); 
+      b = $.trim(b);
       e.setValue(b);
       bufferEnd(e); // restore cursor at the end of last line
     }
-    
+
     function histBack(e) {
       if (e != replIn)
         return;
       if (ndxHist > 0) {
         if (ndxHist == nextHistNdx) {
-          var b = e.getValue();     
+          var b = e.getValue();
           b = $.trim(b);
           if (b != "") {
             // preserve current buffer if not empty
@@ -144,7 +155,7 @@
         }
       }
     }
-    
+
     function histFwd(e) {
       if (e != replIn)
         return;
@@ -153,26 +164,26 @@
         if (ndxHist < nextHistNdx) {
           var b = replHist[ndxHist];
           restoreBuffer(e,b);
-        } else 
+        } else
           e.setValue("");
       }
     }
-    
+
     function clearEditor(e) {
       if (e != replIn)
         return;
-      ndxHist = nextHistNdx;      
+      ndxHist = nextHistNdx;
       replOut.setValue("");
-      replIn.setValue("");     
+      replIn.setValue("");
     }
-    
+
     function clearHistory(e) {
       if (e != replIn)
         return;
       ndxHist = nextHistNdx = 0;
       replIn.setValue("");
     }
- 
+
     function initEditor() {
       replOut = CodeMirror.fromTextArea(document.getElementById('ClojOut'),
         {
@@ -180,50 +191,53 @@
           mode: "text/x-clojure",
           readOnly:true
         });
-      
+
       replIn = CodeMirror.fromTextArea(document.getElementById('Cloj'),
         {
           lineNumbers: true,
           matchBrackets: true,
           mode: "text/x-clojure"
         });
-      
+
       replOut.setValue("");
       replIn.setValue('(println (+ 40 2))');
-      
+
       CodeMirror.keyMap.default["Ctrl-Enter"] = replSubmit;
       CodeMirror.keyMap.default["Ctrl-Up"]    = histBack;
       CodeMirror.keyMap.default["Ctrl-Down"]  = histFwd;
       CodeMirror.keyMap.default["Ctrl-Home"]  = clearEditor;
       CodeMirror.keyMap.default["Ctrl-End"]   = clearHistory;
     }
-   
+
     function clickGetMonData() {
       doAjaxCmd(cmdGetMonData);
     }
-    
+
     function getMsec() {
       return new Date().getTime();
     }
-    
+
     function periodicGetMonData() {
       if (!flagPeriodic)
-        return;   
-      var delta = getMsec() - lastAjaxRequestTime;   
+        return;
+      var delta = getMsec() - lastAjaxRequestTime;
       if ( delta > 2000)
         clickGetMonData();
       setTimeout(periodicGetMonData, 2000);  // issue periodic request every 2 seconds if enabled
     }
-    
+
     function clickDoJvmGc() {
       $("#dojvmgc").attr("disabled", true); // disable button until GC is executed
       doAjaxCmd(cmdDoJvmGc);
     }
-  
+
     function respDoRepl(code, jdata) {
-      var s = code;
+      var s = code+"\n";  // add newline to original script code
       for (obj in jdata) {
         var val = jdata[obj];
+        if (!isObject (val))
+          continue;
+
         if ("out" in val)
           s += val["out"] + "\n";
         if ("value" in val)
@@ -231,8 +245,8 @@
       }
       appendBuffer(replOut,s);
     }
-    
-    function doAjaxCmd(request) {     
+
+    function doAjaxCmd(request) {
       // use inner function to be able to refer to original request in closure
       var respCallback = function ( jdata) {
         var cmd = request["cmd"];
@@ -241,34 +255,34 @@
             jsonToTable(jdata);
             break;
           case "do-jvm-gc":
-            $("#dojvmgc").attr("disabled", false); // re-enable button on cmd ack 
+            $("#dojvmgc").attr("disabled", false); // re-enable button on cmd ack
             clickGetMonData(); // refresh monitoring data
             break;
           case "do-repl":
-            respDoRepl(request["code"], jdata); 
+            respDoRepl(request["code"], jdata);
             break;
         }
       }
-      
+
       lastAjaxRequestTime = getMsec();
-      $.ajax("/admin/moncmd", 
+      $.ajax("/admin/moncmd",
         {
           data: request,    // JSON encoded request
-          type: "GET", 
+          type: "GET",
           dataType: "json",
           contentType: "application/json",
           success: respCallback
         });
     }
-        
+
     function isObject ( obj ) {
       return obj && (typeof obj  === "object");
     }
-    
-    // search json object jobj for the first instance of 
-    // object named objname and 
+
+    // search json object jobj for the first instance of
+    // object named objname and
     // then set its property named "__hidden" to val
-    function annSetHidden(jobj, objname, val) {     
+    function annSetHidden(jobj, objname, val) {
       for (var name in jobj) {
         var v = jobj[name];
         if (isObject(v)) {
@@ -280,19 +294,19 @@
         }
       }
     }
-    
+
     function attachHideHandler (id) {
       $("[id="+id+"]").on("change", function(event) {
         var nameCell, name;
-  
+
         nameCell = event.target.parentElement.nextSibling.nextSibling;
         name = nameCell.textContent;
         name = name.slice(0, name.length - 1); // remove ":" at the end
-        if ($(this).is(':checked')) 
+        if ($(this).is(':checked'))
           annSetHidden(annMonData, name, false);
         else
           annSetHidden(annMonData, name,  true);
-        jsonToTable(annMonData);     
+        jsonToTable(annMonData);
       });
     }
 
@@ -305,16 +319,16 @@
       chkState = "",
       hdr = false,   // true for header row
       hdrPad;       // markup for padding cell to align checkboxes properly
-      
-      if (val === "") 
+
+      if (val === "")
         hdr = true;
-  
+
       if (hdr) {
         align = ' align="left"';
         style = ' style="background:#F5F51D"';
         vstyle = style
-        
-        if (!hidden) 
+
+        if (!hidden)
           chkState  = 'checked="yes"';
         hChk = '<input type="checkbox" id="hide"'+chkState+"></input>";
       } else {
@@ -326,9 +340,9 @@
       if (hdr) {
         hdrPad = "<td"+style+"></td>";
       } else {
-        hdrPad  = "";  
+        hdrPad  = "";
       }
-      
+
       for (var i = 0; i < ident; i++) {
           s += "<td></td>";
       }
@@ -336,7 +350,7 @@
            ":</td><td align=right"+vstyle+">"+val+"</td></tr/>";
       return s;
     }
-    
+
     function makeTbl(s, jdata, ident) {
       for (var name in jdata) {
         var val = jdata[name];
@@ -345,9 +359,9 @@
             s += makeRow(ident, name, val, false);
         }  else {
           var hidden = false;
-          if ("__hidden" in val) 
+          if ("__hidden" in val)
             hidden = val["__hidden"];
-            
+
           s += makeRow(ident, name, "", hidden);
           if (!hidden)
             s += makeTbl("", val, ident+1);
@@ -355,14 +369,14 @@
       }
       return s;
     }
-    
+
     function isEmpty(obj) {
-      for(var i in obj) 
+      for(var i in obj)
         return false;
       return true;
     }
 
-    
+
     function annotateJson(fresh, ann) {
       var init = false;
       var firstobj = false;
@@ -371,12 +385,12 @@
         init = true;
         firstobj = true;
       }
-      
+
       for (var name in fresh) {
         var val = fresh[name];
         if (isObject (val)) {
           if (!(name in ann) ) {
-            ann[name]= fresh[name]; 
+            ann[name]= fresh[name];
             if (init) {
               if (firstobj) {
                 ann[name]["__hidden"] = false;
@@ -391,7 +405,7 @@
         }
       }
     }
-    
+
     function jsonToTable(jdata) {
       annotateJson(jdata, annMonData); // uppdate annotated data
                                        // preserving hidden fields, if any
@@ -400,9 +414,10 @@
       $(".tdata").append(s);
       attachHideHandler("hide");
     }
-   
+
     </script>
-	  
-	 
+
+
   </body>
 </html>
+

@@ -29,13 +29,13 @@
   (let [k (clojure.walk/keywordize-keys msg)
         s (get k :status)]
 
-    (println "srv-> original:" msg)
+    ;(println "srv-> original:" msg)
     (if s
       (let [p (assoc k :status (set-to-vec s))]
-        (println "srv-> patched:" p)
+        ;(println "srv-> patched:" p)
         p)
       (do
-        (println "srv-> patched:" k)
+        ;(println "srv-> patched:" k)
         k))))
 
 (defn patch-from-client-msg
@@ -47,8 +47,8 @@
   [msg]
   (let [p (into {}
             (for [[k v]  msg] [ k (#(name %1) v) ]))]
-     (println "clnt-> original:" msg)
-     (println "clnt-> patched:" p)
+     ;(println "clnt-> original:" msg)
+     ;(println "clnt-> patched:" p)
      p))
 
 (defn transport-pair
@@ -149,26 +149,35 @@
 
 (defn get-new-session
   [client conn]
-  (println "client:" client "\nconn:" conn) (Thread/sleep 1000)
+  ;(println "client:" client "\nconn:" conn) (Thread/sleep 1000)
   (repl/new-session client))
 
 (defn session-instance []
   (let [conn     (connect)
-        client   (repl/client conn 100)
+        client   (repl/client conn 100) ; short timeout makes it snappy
         sid      (get-new-session client conn)
-        resp-seq (repl/client-session {:session sid})]
+        client-msg (repl/client-session client :session sid)
+        seq-head (atom nil)]
 
     (FnSession.
       (fn poll [timeout]
-        (doall resp-seq))
+        (doall @seq-head))
       (fn put [cmd]
-        (let [cid (repl.misc/uuid)]
-          (repl/message
-            client
-            (assoc cmd :session sid :id cid))
-        cid))
+        (let [cid (repl.misc/uuid)
+              sh  (client-msg
+                        (assoc cmd :session sid :id cid))]
+          ;(println sh)
+          (reset! seq-head sh)
+          cid))
       (fn get-id []
         sid))))
+
+(defn active-session?
+  [sid]
+  (let [s (get @sessions sid)
+        r (not= s nil)]
+    ;(println "checking sid " sid r s)
+    r))
 
 (defn init-session
   []
@@ -188,12 +197,5 @@
   (let [s (get @sessions sid)]
     (when s
       (poll s))))
-
-
-
-
-
-
-
 
 

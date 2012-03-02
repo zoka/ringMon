@@ -1,6 +1,6 @@
 (ns noirmon.views.monitor
   (:require [noir.response :as resp]
-            [noir.session :as session]
+            [noir.cookies :as cookies]
             [noirmon.models.nrepl :as repl]
             [clojure.java.jmx :as jmx])
   (:use [noir.core :only [defpage]]))
@@ -74,27 +74,33 @@
   (jmx/invoke "java.lang:type=Memory" :gc)
   {:resp "ok"})
 
+(def ^:const session-age (str (* 3600 24 30)))
+
 (defn get-sess-id
   []
-  (let [id (session/get :repl-sess-id)]
-    (if id
+  (let [id (cookies/get :repl-sess) ]
+    ;(println "retained session id" id)
+    (if (repl/active-session? id)
       id
       (let [id (repl/init-session)]
-        (session/put! :repl-sess-id id)
+        (cookies/put! :repl-sess  {:value id :path "/admin" :max-age session-age})
+        ;(println "new sesion id (valid 30 days):" id)
+        ;(println "new sesion read back:" (cookies/get :repl-sess))
         id))))
 
 (defn do-repl
   [code]
-  (let [sid (get-sess-id)
-        cid (repl/session-put sid {:op :eval :code code})
-        r {:cid cid}]
-    (println "do-repl:" r)
-    r))
+  (let [sid (get-sess-id)]
+    (if-not (= sid "")
+      (let [cid (repl/session-put sid {:op :eval :code code})
+        r (repl/session-poll sid)]
+        r))
+      (repl/session-poll sid)))
     
 (defn do-transient-repl
   [code]
   (let [r  (repl/handle-transient {:op :eval :code code})]
-    (println "do-transient-repl:" r)
+    (println "\ndo-transient-repl:" r)
     r))
 
 (defn decode-cmd 
