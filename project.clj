@@ -3,6 +3,7 @@
             :dependencies [[org.clojure/clojure "1.3.0"]
                            [noir "1.2.2"]
                            [org.clojure/java.jmx "0.1"]
+                           [cheshire "2.2.0"]
                            [org.clojure/tools.nrepl "0.2.0-beta2"]]
             :main noirmon.server)
 

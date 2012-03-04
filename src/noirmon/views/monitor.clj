@@ -1,15 +1,15 @@
 (ns noirmon.views.monitor
   (:require [noir.response :as resp]
-            [noir.cookies :as cookies]
+
             [noirmon.models.nrepl :as repl]
             [clojure.java.jmx :as jmx])
   (:use [noir.core :only [defpage]]))
 
 
 (def cpu-load      (atom 0.0))
-(def ajax-reqs-ps  (atom 0.0))     ; ajax requests per second
+(def ajax-reqs-ps  (atom 0.0))   ; ajax requests per second
 (def ajax-reqs-tot (atom 0))     ; total requests
-  
+
 (def ^:const sample-interval 2000) ; msec
 
 (defn get-process-nanos
@@ -30,14 +30,14 @@
          old-ajax-reqs     0]
 
          (Thread/sleep sample-interval)
-         (reset! cpu-load 
+         (reset! cpu-load
                  (calc-cpu-load
                    (- process-nanos old-process-nanos)
                    (- real-nanos old-real-nanos)))
-         
-         (reset! ajax-reqs-ps 
+
+         (reset! ajax-reqs-ps
                  (/ (- ajax-reqs old-ajax-reqs) 2.0))
-      
+
          (recur (get-process-nanos)
                 (System/nanoTime)
                 @ajax-reqs-tot
@@ -50,76 +50,49 @@
   ; kick off endless data-sampler thread
   ; has to be called from noirmon.server/-main
   (.start (Thread. data-sampler))
-  ) 
-   
+  )
+
+(declare do-repl)
 
 (defn get-mon-data
-  []
+  [sname]
   (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
         mem (jmx/mbean "java.lang:type=Memory")
         ; java.jmx returns Java arrays which repl/json can not handle
         ; and thread id values are not interesting anyway
-        th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)]
-        
-        {:Application   
+        th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)
+        repl (repl/do-cmd "" sname)]
+
+        {:Application
           {:CpuLoad         (format "%5.2f%%" @cpu-load)
-          :AjaxReqsTotal   @ajax-reqs-tot 
-          :AjaxReqsPerSec  (format "%7.2f" @ajax-reqs-ps)}
-          :OperatingSystem os 
-          :Memory          mem
-          :Threading       th}))
+           :AjaxReqsTotal   @ajax-reqs-tot
+           :AjaxReqsPerSec  (format "%7.2f" @ajax-reqs-ps)}
+           :OperatingSystem os
+           :Memory          mem
+           :Threading       th
+           :nREPL repl}))
 
 (defn do-jvm-gc
   []
   (jmx/invoke "java.lang:type=Memory" :gc)
   {:resp "ok"})
 
-(def ^:const session-age (str (* 3600 24 30)))
 
-(defn get-sess-id
-  []
-  (let [id (cookies/get :repl-sess) ]
-    ;(println "retained session id" id)
-    (if (repl/active-session? id)
-      id
-      (let [id (repl/init-session)]
-        (cookies/put! :repl-sess  {:value id :path "/admin" :max-age session-age})
-        ;(println "new sesion id (valid 30 days):" id)
-        ;(println "new sesion read back:" (cookies/get :repl-sess))
-        id))))
-
-(defn do-repl
-  [code]
-  (let [sid (get-sess-id)]
-    (if-not (= sid "")
-      (let [cid (repl/session-put sid {:op :eval :code code})
-        r (repl/session-poll sid)]
-        r))
-      (repl/session-poll sid)))
-    
-(defn do-transient-repl
-  [code]
-  (let [r  (repl/handle-transient {:op :eval :code code})]
-    (println "\ndo-transient-repl:" r)
-    r))
-
-(defn decode-cmd 
+(defn decode-cmd
   [request]
   (let [cmd (keyword (:cmd request))]
-    (swap! ajax-reqs-tot inc)  
+    (swap! ajax-reqs-tot inc)
     (case cmd
-      :get-mon-data (get-mon-data)
+      :get-mon-data (get-mon-data (:sess request))
       :do-jvm-gc    (do-jvm-gc)
-      :do-repl      (do-repl (:code request))
+      :do-repl      (repl/do-cmd (:code request) (:sess request))
       {:resp "bad-cmd"})))
-
-;-------------------------------------------------------
 
 (defpage "/admin/monview"
   []
   (resp/redirect "/admin/monview.html"))
 
-(defpage 
+(defpage
   [:get "/admin/moncmd"] {:as params}
   (let [reply (decode-cmd params)]
     (resp/json reply)))

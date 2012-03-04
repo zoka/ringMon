@@ -3,7 +3,9 @@
             [clojure.tools.nrepl.misc      :as misc]
             [clojure.tools.nrepl.transport :as t]
             [clojure.tools.nrepl           :as repl]
+            [noir.cookies                  :as cookies]
             [clojure.tools.nrepl.misc      :as repl.misc]
+            [cheshire.core                 :as json]
             (clojure walk))
   (:import  (clojure.tools.nrepl.transport FnTransport)
              (java.util.concurrent
@@ -46,10 +48,10 @@
   properly interpreted on server side."
   [msg]
   (let [p (into {}
-            (for [[k v]  msg] [ k (#(name %1) v) ]))]
+    (for [[k v]  msg] [ k (#(name %1) v) ]))]
      ;(println "clnt-> original:" msg)
      ;(println "clnt-> patched:" p)
-     p))
+    p))
 
 (defn transport-pair
  "Returns vector of 2 direct transport instances,
@@ -117,11 +119,8 @@
     (future (with-open
               [transport server-t
                handler   (server/default-handler)]
-              (handle handler transport)))
+              (server/handle handler transport)))
     client-t))
-
-
-(def sessions (atom {}))
 
 ;; transient session
 (defn handle-transient [req]
@@ -131,44 +130,38 @@
       (repl/message req)
       doall)))
 
+(def sessions (atom {}))  ;; active sessions map
 
 (defprotocol SessionOps
-  (poll [this] [this timeout]
-    "Reads and returns accumulated session output. Will block if timeout is
-     nonzero. Should return nil if message is not available after `timeout`
-     ms.")
-  (put [this cmd] "Sends msg. Implementations should return the transport.")
+  (poll [this] 
+    "Reads and returns accumulated session output. Can return nil
+     if no output is pending.")
+  (put [this cmd] "Sends command to the session instance.")
   (get-id [this] "Gets session id"))
 
 (deftype FnSession [poll-fn put-fn get-id-fn]
   SessionOps
-  (put  [this cmd]  (put-fn cmd))
-  (poll [this] (.poll this 0))
-  (poll [this timeout] (poll-fn timeout))
-  (get-id [this] (get-id-fn)))
+  (poll [this]        (poll-fn))
+  (put  [this cmd]    (put-fn cmd))
+  (get-id [this]      (get-id-fn)))
 
 (defn get-new-session
   [client conn]
   ;(println "client:" client "\nconn:" conn) (Thread/sleep 1000)
   (repl/new-session client))
 
-(defn session-instance []
+(defn session-instance [timeout]
   (let [conn     (connect)
-        client   (repl/client conn 100) ; short timeout makes it snappy
+        client   (repl/client conn timeout) ; short timeout makes it snappy
         sid      (get-new-session client conn)
-        client-msg (repl/client-session client :session sid)
-        seq-head (atom nil)]
+        client-msg (repl/client-session client :session sid)]
 
     (FnSession.
-      (fn poll [timeout]
-        (doall @seq-head))
+      (fn poll []
+        (doall (client)))
       (fn put [cmd]
-        (let [cid (repl.misc/uuid)
-              sh  (client-msg
-                        (assoc cmd :session sid :id cid))]
-          ;(println sh)
-          (reset! seq-head sh)
-          cid))
+        (let [cid (repl.misc/uuid)]
+          (client-msg (assoc cmd :session sid :id cid))))
       (fn get-id []
         sid))))
 
@@ -181,7 +174,7 @@
 
 (defn init-session
   []
-  (let [s (session-instance)]
+  (let [s (session-instance 100)]
     (when s
       (swap! sessions assoc (get-id s) s))
         (get-id s)))
@@ -197,5 +190,57 @@
   (let [s (get @sessions sid)]
     (when s
       (poll s))))
+
+(def ^:const session-age (str (* 3600 24 30)))
+
+(defn get-active-browser-sessions
+  []
+   (let [s (cookies/get :repl-sess)
+         m (json/parse-string s)]
+    (if-not (map? m)
+      {}
+      (loop [r {} m m]
+        (if (empty? m)
+          r
+          (let [[name sid] (first m)]
+            (if (active-session? sid)
+              (recur (assoc r name sid) (rest m))
+              (recur r (rest m)))))))))
+ 
+(defn get-sess-id
+  [sname]
+  (let [as  (get-active-browser-sessions)
+        sid (get as sname)]
+    (if-not sid
+      (let [new-sid (init-session)
+            new-as  (assoc as sname new-sid)
+            cval (json/generate-string new-as)]
+        ;(println "new map id (valid 30 days):" cval sname)
+        (cookies/put! :repl-sess  {:value cval 
+                                   :path "/admin"
+                                   :max-age session-age})
+        new-sid)
+      sid)))
+
+(defn do-cmd
+  [code sname]
+  (let [sid (get-sess-id sname)]
+    (if-not (= sid "")
+      (if (not= code "")
+        (let [r (session-put sid {:op :eval :code code})]
+          (println "put response:"r)
+          r)
+        (let [r (session-poll sid)]
+          (when-not (empty? r)
+            (println "bkg polled:" r))
+          r)))))
+    
+(defn do-transient-repl
+  [code]
+  (let [r  (handle-transient {:op :eval :code code})]
+    ;(println "\ndo-transient-repl:" r)
+    r))
+
+
 
 

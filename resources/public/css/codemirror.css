@@ -67,8 +67,13 @@
   visibility: visible;
 }
 
+
 div.CodeMirror-selected { background: #d9d9d9; }
 .CodeMirror-focused div.CodeMirror-selected { background: #d7d4f0; }
+
+/* nREPL specific */
+.cms-default span.cm-repl-code-out { background: #d7d4f0; }
+.cm-s-default span.cm-repl-val  {color: #0c0;}
 
 .CodeMirror-searching {
   background: #ffa;
@@ -93,9 +98,10 @@ div.CodeMirror-selected { background: #d9d9d9; }
 .cm-s-default span.cm-error {color: #f00;}
 .cm-s-default span.cm-qualifier {color: #555;}
 .cm-s-default span.cm-builtin {color: #30a;}
-.cm-s-default span.cm-bracket {color: #cc7;}
+/* .cm-s-default span.cm-bracket {color: #cc7;} make brackets blue, see next line*/ 
+.cm-s-default span.cm-bracket {color: #00c;} 
 .cm-s-default span.cm-tag {color: #170;}
-.cm-s-default span.cm-attribute {color: #00c;}
+.cm-s-default span.cm-attribute {color: #00f;}
 .cm-s-default span.cm-header {color: #a0a;}
 .cm-s-default span.cm-quote {color: #090;}
 .cm-s-default span.cm-hr {color: #999;}
