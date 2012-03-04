@@ -90,7 +90,7 @@
           {:CpuLoad           (format "%5.2f%%" @cpu-load)
            :AjaxReqsTotal     @ajax-reqs-tot
            :AjaxReqsPerSec    (format "%7.2f" @ajax-reqs-ps)
-           :nReplSessionCount (repl/get-sess-count)}
+           :nReplSessions     (repl/get-sess-count)}
            :OperatingSystem   os
            :Memory            mem
            :Threading         th
