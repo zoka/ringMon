@@ -138,7 +138,7 @@
     (count k)))
 
 (defprotocol SessionOps
-  (poll [this] 
+  (poll [this]
     "Reads and returns accumulated session output. Can return nil
      if no output is pending.")
   (put [this cmd] "Sends command to the session instance.")
@@ -211,7 +211,7 @@
             (if (active-session? sid)
               (recur (assoc r name sid) (rest m))
               (recur r (rest m)))))))))
- 
+
 (defn get-sess-id
   [sname]
   (let [as  (get-active-browser-sessions)
@@ -221,7 +221,7 @@
             new-as  (assoc as sname new-sid)
             cval (json/generate-string new-as)]
         ;(println "new map id (valid 30 days):" cval sname)
-        (cookies/put! :repl-sess  {:value cval 
+        (cookies/put! :repl-sess  {:value cval
                                    :path "/admin"
                                    :max-age session-age})
         new-sid)
@@ -230,7 +230,7 @@
 (defn do-cmd
   [code sname]
   (let [sid (get-sess-id sname)]
-    (if-not (= sid "")
+    (when-not (= sid "")
       (if (not= code "")
         (let [r (session-put sid {:op :eval :code code})]
           (println "put response:"r)
@@ -239,13 +239,20 @@
           (when-not (empty? r)
             (println "bkg polled:" r))
           r)))))
-    
+
 (defn do-transient-repl
   [code]
   (let [r  (handle-transient {:op :eval :code code})]
     ;(println "\ndo-transient-repl:" r)
     r))
 
-
+(defn break
+  [cid sname]
+  (let [sid (get-sess-id sname)]
+    (when-not (= sid "")
+      (let [r (session-put sid {:op :interrupt :interrupt-id cid})]
+        (println "requesting break for" cid)
+        (println "put irq response:"r)
+          r))))
 
 

@@ -110,6 +110,7 @@
       :get-mon-data (get-mon-data (:sess request))
       :do-jvm-gc    (do-jvm-gc)
       :do-repl      (repl/do-cmd (:code request) (:sess request))
+      :repl-break   (repl/break  (:cid request) (:sess request))
       {:resp "bad-cmd"})))
 
 (defpage main "/admin/monview"

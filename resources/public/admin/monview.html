@@ -34,6 +34,7 @@
     </table>
 
     <span>nREPL output</span>
+    <button id="irq" style="margin-left:25px;">Interrupt</button>
     <textarea id="ClojOut">
     </textarea>
     <span>nREPL input. Ctrl-Enter to submit the current buffer/selection.
@@ -49,6 +50,8 @@
     var nReplPending = false;
 
     var replSession="One";
+    var lastCid=""; // last repl command id
+
     var replIn, replOut;
     var replHist = [];
     var nextHistNdx = 0;
@@ -64,6 +67,7 @@
       // button handlers
       $("#getmondata").click(clickGetMonData);
       $("#dojvmgc").click(clickDoJvmGc);
+      $("#irq").click(replBreak);
 
       // initial refresh
       clickGetMonData();
@@ -105,6 +109,16 @@
           code: "",
           sess: replSession
         });
+    }
+
+    function replBreak() {
+      doAjaxCmd (
+      {
+        cmd: "repl-break",
+        cid: lastCid,
+        sess: replSession
+      });
+
     }
 
     function replSubmit(e) {
@@ -200,13 +214,15 @@
     }
 
     var clojScript =
-       "(future"
-+ "\n" + "  (loop [i 0]"
-+ "\n" + "    (Thread/sleep 1000)"
-+ "\n" + '    (println \"i=\"i)'
-+ "\n" + "    (if (< i 5)"
-+ "\n" + "      (recur (inc i))"
-+ "\n" + "      i)))              ; press Ctr-Enter to submit for execution";
+
+         "(loop [i 0]"
++ "\n" + '  (println \"i=\"i)'
++ "\n" + "  (Thread/sleep 1000)"
++ "\n" + "  (if (< i 10)"
++ "\n" + "    (recur (inc i))"
++ "\n" + "    i))      ; press Ctr-Enter to submit for execution"
++ "\n" + "             ; Once started, execution of this script can be "
++ "\n" + '             ; stopped by "Interrupt" button';
 
     function initEditor() {
       replOut = CodeMirror.fromTextArea(document.getElementById('ClojOut'),
@@ -304,6 +320,14 @@
         appendBuffer(e,"\n");
     }
 
+    function searchVec (v, text) {
+      for (i in v) {
+        if (v[i] == text)
+          return true;
+      }
+      return false;
+    }
+
     function respDoRepl(code, jdata) {
       var s = code;
       if (code != "")
@@ -333,6 +357,19 @@
           s += text;
           replPrint(replOut,"err", text);
         }
+        if ("status" in val) {
+          var svec = val["status"];
+          if (searchVec(svec,"interrupted")) {
+          replPrint(replOut, "err", "Interrupted");
+          } else {
+            if (searchVec(svec,"interrupt-id-mismatch")) {
+              replPrint(replOut, "err", "Interrupt operation failed");
+            }
+          }
+        }
+        if ("id" in val) {
+            lastCid = val["id"];    // record last command id
+        }
       }
       if (s != "") {
         // there was some repl output activity
@@ -356,6 +393,8 @@
           case "do-repl":
             respDoRepl(request["code"], jdata);
             break;
+          case "repl-break":
+            respDoRepl("", jdata);
         }
       }
 
