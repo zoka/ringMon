@@ -1,6 +1,6 @@
 (ns noirmon.views.monitor
   (:require [noir.response :as resp]
-
+            [noir.server :as server]
             [noirmon.models.nrepl :as repl]
             [clojure.java.jmx :as jmx])
   (:use [noir.core :only [defpage]]))
@@ -45,12 +45,35 @@
                 real-nanos
                 ajax-reqs)))
 
+
+;; gzip middlevare
+(defn with-gzip [handler]
+  (fn [request]
+    (let [response (handler request)
+      out (java.io.ByteArrayOutputStream.)
+      accept-encoding (.get (:headers request) "accept-encoding")]
+
+      (if (and (not (nil? accept-encoding))
+          (re-find #"gzip" accept-encoding))
+        (do
+          (doto (java.io.BufferedOutputStream.
+                (java.util.zip.GZIPOutputStream. out))
+                (.write (.getBytes (:body response)))
+                (.close))
+
+          {:status (:status response)
+           :headers (assoc (:headers response)
+                     "Content-Type" "text/html"
+                     "Content-Encoding" "gzip")
+           :body (java.io.ByteArrayInputStream. (.toByteArray out))})
+          response))))
+
 (defn init
   []
   ; kick off endless data-sampler thread
   ; has to be called from noirmon.server/-main
   (.start (Thread. data-sampler))
-  )
+  (server/add-middleware with-gzip))
 
 (declare do-repl)
 
@@ -64,12 +87,13 @@
         repl (repl/do-cmd "" sname)]
 
         {:Application
-          {:CpuLoad         (format "%5.2f%%" @cpu-load)
-           :AjaxReqsTotal   @ajax-reqs-tot
-           :AjaxReqsPerSec  (format "%7.2f" @ajax-reqs-ps)}
-           :OperatingSystem os
-           :Memory          mem
-           :Threading       th
+          {:CpuLoad           (format "%5.2f%%" @cpu-load)
+           :AjaxReqsTotal     @ajax-reqs-tot
+           :AjaxReqsPerSec    (format "%7.2f" @ajax-reqs-ps)
+           :nReplSessionCount (repl/get-sess-count)}
+           :OperatingSystem   os
+           :Memory            mem
+           :Threading         th
            :nREPL repl}))
 
 (defn do-jvm-gc
@@ -88,11 +112,11 @@
       :do-repl      (repl/do-cmd (:code request) (:sess request))
       {:resp "bad-cmd"})))
 
-(defpage "/admin/monview"
+(defpage main "/admin/monview"
   []
   (resp/redirect "/admin/monview.html"))
 
-(defpage
+(defpage ajax
   [:get "/admin/moncmd"] {:as params}
   (let [reply (decode-cmd params)]
     (resp/json reply)))

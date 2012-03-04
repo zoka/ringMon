@@ -132,6 +132,11 @@
 
 (def sessions (atom {}))  ;; active sessions map
 
+(defn get-sess-count
+  []
+  (let [k (keys @sessions)]
+    (count k)))
+
 (defprotocol SessionOps
   (poll [this] 
     "Reads and returns accumulated session output. Can return nil
