@@ -95,19 +95,6 @@
            (.clear client-q)))]  ; safe to clear incomming queue
   [client-transport server-transport]))
 
-(defn handle
-  "Handles requests received via `transport` using `handler`.
-   Returns nil when `recv` returns nil for the given transport."
-  [handler transport]
-  (when-let [msg (t/recv transport)]
-    (try
-      (or (handler (assoc msg :transport transport))
-          (server/unknown-op transport msg))
-      (catch Throwable t
-        (println "Unhandled REPL handler exception processing message" msg)))
-    (recur handler transport)))
-
-
 (defn connect
   "Connects to an REPL within the same procees using
    pair of LinkedBlockedQueue instances.
@@ -122,9 +109,8 @@
               (server/handle handler transport)))
     client-t))
 
-;; transient session
+; transient session
 (defn handle-transient [req]
-  (println "orig request:" req)
   (with-open [conn (connect)]
     (-> (repl/client conn 5000)
       (repl/message req)
@@ -137,48 +123,86 @@
   (let [k (keys @sessions)]
     (count k)))
 
+
 (defprotocol SessionOps
   (poll [this]
     "Reads and returns accumulated session output. Can return nil
      if no output is pending.")
-  (put [this cmd] "Sends command to the session instance.")
-  (get-id [this] "Gets session id"))
+  (put [this cmd]      "Send command to the session instance.")
+  (get-id [this]       "Get session id.")
+  (get-pending [this]  "Get the id of the currently pending command or nil."))
 
-(deftype FnSession [poll-fn put-fn get-id-fn]
+(deftype FnSession [poll-fn put-fn get-id-fn get-pending-fn]
   SessionOps
   (poll [this]        (poll-fn))
   (put  [this cmd]    (put-fn cmd))
-  (get-id [this]      (get-id-fn)))
+  (get-id [this]      (get-id-fn))
+  (get-pending [this] (get-pending-fn)))
 
-(defn get-new-session
-  [client conn]
-  ;(println "client:" client "\nconn:" conn) (Thread/sleep 1000)
-  (repl/new-session client))
-
-(defn session-instance [timeout]
+(defn session-instance
+  [timeout]
   (let [conn     (connect)
-        client   (repl/client conn timeout) ; short timeout makes it snappy
-        sid      (get-new-session client conn)
-        client-msg (repl/client-session client :session sid)]
-
+        client   (repl/client conn timeout) ; short timeout requirea (100 ms)
+        sid      (repl/new-session client)
+        client-msg (repl/client-session client :session sid)
+        cmdQ     (atom (clojure.lang.PersistentQueue/EMPTY))
+        last-irq-cid (atom nil)
+        do-resp (fn [resp] ; response is sequence of maps
+                  "Take command response in and return it back with
+                   appropriate pending indication. Examine every
+                   status field in response and remove 'done' commands
+                   from the pending commands queue head."
+                  (loop [r resp pid (peek @cmdQ)]
+                    (if (empty? r)
+                      (conj resp {:pend (not (nil? pid))})
+                      (let [ e (first r)
+                             s (:status e)]
+                        (when s
+                          (when (not= -1 (.indexOf s "done")) ; "done" is part of status?
+                            (let [cid (:id e)]
+                              ; (println "Entry" e) (print "pid" pid) (println "q-vount" (count @cmdQ))
+                              (when (not= cid @last-irq-cid)  ; ignore last-irq-cid
+                                (if-not pid
+                                  (println "No pending commands, but got status response" cid)
+                                  (if (= cid pid)
+                                    (swap! cmdQ pop)
+                                    (println "cid pid mismatch" cid pid)))))))
+                        (recur (next r) (peek @cmdQ))))))]
     (FnSession.
       (fn poll []
-        (doall (client)))
+        (do-resp (client)))
       (fn put [cmd]
         (let [cid (repl.misc/uuid)]
-          (client-msg (assoc cmd :session sid :id cid))))
+              ; attach command and session ids to original command
+              ; before submitting it to nREPL server
+              (client-msg (assoc cmd :session sid :id cid))
+              (if-not (= (:op cmd) :interrupt)
+                (swap! cmdQ conj cid)      ; put in the Q if it is not interrupt command
+                (reset! last-irq-cid cid)) ; else record the cid for later reference
+              ;(println "submitted:" (assoc cmd :session sid :id cid))
+              (let [r (client)]
+                (if (empty? r)
+                  [{:id cid} :pend true] ; if no immediate response in 100 ms,
+                                         ; just return command id and pending indication
+                  (do-resp r)            ; else return nREPL response,
+                                         ; containing command id anyway
+                ))))
       (fn get-id []
-        sid))))
+        sid)
+      (fn get-pending []
+        (peek @cmdQ)))))
 
 (defn active-session?
   [sid]
   (let [s (get @sessions sid)
         r (not= s nil)]
-    ;(println "checking sid " sid r s)
     r))
 
 (defn init-session
   []
+  "note: the low timeout value of 100ms for session means
+   that client will not stay blocked after submitting a
+   long duration command such as '(Thread/sleep 1000)'"
   (let [s (session-instance 100)]
     (when s
       (swap! sessions assoc (get-id s) s))
@@ -220,7 +244,7 @@
       (let [new-sid (init-session)
             new-as  (assoc as sname new-sid)
             cval (json/generate-string new-as)]
-        ;(println "new map id (valid 30 days):" cval sname)
+        ;(println "new session map id (valid 30 days):" cval sname)
         (cookies/put! :repl-sess  {:value cval
                                    :path "/admin"
                                    :max-age session-age})
@@ -233,26 +257,27 @@
     (when-not (= sid "")
       (if (not= code "")
         (let [r (session-put sid {:op :eval :code code})]
-          (println "put response:"r)
+          ;(println "put response:"r)
           r)
         (let [r (session-poll sid)]
-          (when-not (empty? r)
-            (println "bkg polled:" r))
+          ; (when-not (empty? r) (println "bkg polled:" r))
           r)))))
 
 (defn do-transient-repl
   [code]
   (let [r  (handle-transient {:op :eval :code code})]
-    ;(println "\ndo-transient-repl:" r)
     r))
 
 (defn break
-  [cid sname]
+  [sname]
   (let [sid (get-sess-id sname)]
     (when-not (= sid "")
-      (let [r (session-put sid {:op :interrupt :interrupt-id cid})]
-        (println "requesting break for" cid)
-        (println "put irq response:"r)
-          r))))
-
+      (let [s (get @sessions sid)]
+        (when s
+          (let [cid (get-pending s)]
+            ;(println "requesting break for" cid)
+            (if cid
+              (let [r (put s {:op :interrupt :interrupt-id cid})]
+                r)
+              (println "break: no command pending"))))))))
 

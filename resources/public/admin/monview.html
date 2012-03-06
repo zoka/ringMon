@@ -50,7 +50,7 @@
     var nReplPending = false;
 
     var replSession="One";
-    var lastCid=""; // last repl command id
+    var cmdQ = createCommandQ();
 
     var replIn, replOut;
     var replHist = [];
@@ -85,7 +85,8 @@
       });
 
       initEditor();
-      $('#periodic').trigger('click'); // periodic data update on
+      $('#periodic').trigger('click');  // periodic data update on
+      $("#irq").attr("disabled", true); // interrupt button disabled
     });
 
 
@@ -115,10 +116,54 @@
       doAjaxCmd (
       {
         cmd: "repl-break",
-        cid: lastCid,
         sess: replSession
       });
+    }
 
+    function createCommandQ() {
+      var q = []; // head at array start
+      var pend = 0;   // index of the command in the Q that is pending
+      var that = this;  //
+
+      function remove (q, cid) {
+        var r = [];
+        var j = 0;
+        for (var i in q)
+          if (q[i] != cid)
+            r[j++] = q[i];
+        return r;
+      }
+
+      this.put = function (cid) {
+        // only put command in the Q if not already there
+        console.log("put:" + cid);
+        var found = false;
+        for (var i in q) {
+          if (cid == q[i]) {
+            found = true;
+            break;
+          }
+        }
+        if (!found)
+          q[q.length] = cid;
+        console.log("after put:" + q);
+        return !found; // return true if it was queued
+      },
+
+      this.remove = function (cid) {
+        console.log("remove:" + cid);
+        q = remove(q,cid);
+        console.log("after remove:" + q);
+        return( q.length == 0); // return true if Q was made empty
+      },
+
+      this.getPendingCid = function () {
+        if (q.length)
+          return q[pend];
+        else
+          return "";
+      }
+      return this;
     }
 
     function replSubmit(e) {
@@ -131,19 +176,28 @@
       if (b == "")
         return;     // nothing to do
 
-      if (s == "") {
+      if (s == "") { // no selection
         e.setValue("");
         replHist [nextHistNdx++] = b;
         ndxHist = nextHistNdx; // history pointer past freshest item
+        if (ndxHist > 1) {
+          if (replHist[ndxHist-1] == replHist[ndxHist-2]) {
+            // do not polute history with same buffer values
+            ndxHist--;
+            nextHistNdx--;
+          }
+        }
       } else
         b = s;  // submit sellection only, no need to flush the current buffer
 
+     $("#irq").attr("disabled", false);   // enable interrupt button
       doAjaxCmd (
       {
         cmd: "do-repl",
         code: b,
         sess: replSession
       });
+
     }
 
     function bufferEnd(e) {
@@ -321,7 +375,7 @@
     }
 
     function searchVec (v, text) {
-      for (i in v) {
+      for (var i in v) {
         if (v[i] == text)
           return true;
       }
@@ -360,15 +414,20 @@
         if ("status" in val) {
           var svec = val["status"];
           if (searchVec(svec,"interrupted")) {
-          replPrint(replOut, "err", "Interrupted");
-          } else {
-            if (searchVec(svec,"interrupt-id-mismatch")) {
-              replPrint(replOut, "err", "Interrupt operation failed");
-            }
+            replPrint(replOut, "err", "Interrupted");
+          }
+          if (searchVec(svec,"interrupt-id-mismatch")) {
+            replPrint(replOut, "err", "Interrupt operation failed");
           }
         }
-        if ("id" in val) {
-            lastCid = val["id"];    // record last command id
+        if ("pend" in val) {
+          if (val["pend"]) {
+            $("#irq").attr("disabled", false);   // enable interrupt button
+            console.log("enabled");
+          } else {
+            $("#irq").attr("disabled", true);   // disable interrupt button
+            console.log("disabled");
+          }
         }
       }
       if (s != "") {
@@ -445,6 +504,19 @@
     }
 
     function makeRow(ident, name, val, hidden) {
+      var TreeStyles =
+      {
+        Hdr : {
+          light:  ' style="background:#F5F51D"',
+          dark:   ' style="background:#80800E"'},
+        Name : {
+          light:  ' style="background:#BAF7C3"',
+          dark:   ' style="background:#5DF7C3"'},
+        Val : {
+          light:  ' style="background:#B5F2F5"',
+          dark:   ' style="background:#B5F2F5"'}
+      };
+
       var s = "<tr>",
       align ,
       style ,
@@ -459,7 +531,7 @@
 
       if (hdr) {
         align = ' align="left"';
-        style = ' style="background:#F5F51D"';
+        style = TreeStyles.Hdr.light;
         vstyle = style
 
         if (!hidden)
@@ -467,8 +539,8 @@
         hChk = '<input type="checkbox" id="hide"'+chkState+"></input>";
       } else {
         align = ' align="right"';
-        style = ' style="background:#BAF7C3"';
-        vstyle = ' style="background:#B5F2F5"';
+        style =  TreeStyles.Name.light;
+        vstyle =  TreeStyles.Val.light;
       }
 
       if (hdr) {
