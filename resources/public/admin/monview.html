@@ -85,6 +85,9 @@
       });
 
       initEditor();
+      $("#periodic").prop("checked", false); // make sure that periodic is initially uncheked
+                                             // if this is not done loading back from browser 
+                                             // history toggles it on/off
       $('#periodic').trigger('click');  // periodic data update on
       $("#irq").attr("disabled", true); // interrupt button disabled
     });

@@ -139,6 +139,22 @@
   (get-id [this]      (get-id-fn))
   (get-pending [this] (get-pending-fn)))
 
+
+(defn peek-q
+  [q]
+  (let [e (peek q)]
+    (get e 0)))  ; return cid field only
+
+(defn dump-q
+  [q]
+  (loop [n (count q) i 0]
+    (if (zero? n)
+      i
+      (let [e (nth q i)]
+        (println i"=" (get e 0))
+        (println (get e 1))
+        (recur (dec n) (inc i))))))
+
 (defn session-instance
   [timeout]
   (let [conn     (connect)
@@ -146,28 +162,29 @@
         sid      (repl/new-session client)
         client-msg (repl/client-session client :session sid)
         cmdQ     (atom (clojure.lang.PersistentQueue/EMPTY))
-        last-irq-cid (atom nil)
+        last-e (atom nil)
         do-resp (fn [resp] ; response is sequence of maps
                   "Take command response in and return it back with
                    appropriate pending indication. Examine every
                    status field in response and remove 'done' commands
-                   from the pending commands queue head."
-                  (loop [r resp pid (peek @cmdQ)]
+                   from the pending queue head."
+                  (loop [r resp pid (peek-q @cmdQ)]
                     (if (empty? r)
                       (conj resp {:pend (not (nil? pid))})
                       (let [ e (first r)
                              s (:status e)]
                         (when s
                           (when (not= -1 (.indexOf s "done")) ; "done" is part of status?
-                            (let [cid (:id e)]
-                              ; (println "Entry" e) (print "pid" pid) (println "q-vount" (count @cmdQ))
-                              (when (not= cid @last-irq-cid)  ; ignore last-irq-cid
+                            (if (= e @last-e)        ; spmetimed we get duplicate status messages
+                              nil                          ; just recur (nil is placeholder of error handling)
+                              (let [cid (:id e)]           ; else continue
+                                (reset! last-e e)
                                 (if-not pid
-                                  (println "No pending commands, but got status response" cid)
+                                  nil
                                   (if (= cid pid)
                                     (swap! cmdQ pop)
-                                    (println "cid pid mismatch" cid pid)))))))
-                        (recur (next r) (peek @cmdQ))))))]
+                                    nil ))))))
+                        (recur (next r) (peek-q @cmdQ))))))]
     (FnSession.
       (fn poll []
         (do-resp (client)))
@@ -176,9 +193,8 @@
               ; attach command and session ids to original command
               ; before submitting it to nREPL server
               (client-msg (assoc cmd :session sid :id cid))
-              (if-not (= (:op cmd) :interrupt)
-                (swap! cmdQ conj cid)      ; put in the Q if it is not interrupt command
-                (reset! last-irq-cid cid)) ; else record the cid for later reference
+              (when-not (= (:op cmd) :interrupt)
+                (swap! cmdQ conj [cid cmd])); put in the Q if it is not interrupt command
               ;(println "submitted:" (assoc cmd :session sid :id cid))
               (let [r (client)]
                 (if (empty? r)
@@ -190,7 +206,7 @@
       (fn get-id []
         sid)
       (fn get-pending []
-        (peek @cmdQ)))))
+        (peek-q @cmdQ)))))
 
 (defn active-session?
   [sid]
@@ -260,7 +276,7 @@
           ;(println "put response:"r)
           r)
         (let [r (session-poll sid)]
-          ; (when-not (empty? r) (println "bkg polled:" r))
+          ;(when-not (empty? r) (println "bkg polled:" r))
           r)))))
 
 (defn do-transient-repl
@@ -278,6 +294,7 @@
             ;(println "requesting break for" cid)
             (if cid
               (let [r (put s {:op :interrupt :interrupt-id cid})]
+                ;(println "break response:" r)
                 r)
               (println "break: no command pending"))))))))
 
