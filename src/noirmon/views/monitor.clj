@@ -125,12 +125,13 @@
       :repl-break   (repl/break  (:sess request))
       {:resp "bad-cmd"})))
 
-(defpage main "/admin/monview"
+(defpage main "/ringmon"
   []
-  (resp/redirect "/admin/monview.html"))
+  (resp/redirect "/ringmon/monview.html"))
+
 
 (defpage ajax
-  [:get "/admin/moncmd"] {:as params}
+  [:get "/ringmon/command"] {:as params}
   (let [reply (decode-cmd params)]
     (resp/json reply)))
 

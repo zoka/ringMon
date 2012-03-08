@@ -2,11 +2,11 @@
   <head>
     <title>noirMon</title>
     <meta charset="utf-8">
-    <script src="/js/jquery-1.7.1.min.js"></script>
+    <script src="/ringmon/js/jquery-1.7.1.min.js"></script>
 
-    <script src="/js/codemirror.js"></script>
-    <script src="/js/clojure.js"></script>
-    <link rel="stylesheet" href="/css/codemirror.css">
+    <script src="/ringmon/js/codemirror.js"></script>
+    <script src="/ringmon/js/clojure.js"></script>
+    <link rel="stylesheet" href="/ringmon/css/codemirror.css">
     <style> .CodeMirror { border: 1px solid black; }</style>
   </head>
 
@@ -488,7 +488,7 @@
       }
 
       lastAjaxRequestTime = getMsec();
-      $.ajax("/admin/moncmd",
+      $.ajax("/ringmon/command",
         {
           data: request,    // JSON encoded request
           type: "GET",

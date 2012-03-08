@@ -13,6 +13,6 @@
 ;
   
 (defpage "/" []
-  (resp/redirect "/admin/monview.html"))
+  (resp/redirect "/ringmon/monview.html"))
 
 
