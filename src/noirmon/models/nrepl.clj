@@ -263,7 +263,7 @@
             cval (json/generate-string new-as)]
         ;(println "new session map id (valid 30 days):" cval sname)
         (cookies/put! :repl-sess  {:value cval
-                                   :path "/admin"
+                                   :path "/ringmon"
                                    :max-age session-age})
         new-sid)
       sid)))
