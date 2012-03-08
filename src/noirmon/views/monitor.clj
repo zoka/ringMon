@@ -47,18 +47,20 @@
 
 
 ;; gzip middlevare
-(defn with-gzip [handler]
+(defn wrap-gzip [handler]
   (fn [request]
     (let [response (handler request)
-      out (java.io.ByteArrayOutputStream.)
-      accept-encoding (.get (:headers request) "accept-encoding")]
+          body     (:body response)
+          out      (java.io.ByteArrayOutputStream.)
+          accept-encoding (.get (:headers request) "accept-encoding")]
 
-      (if (and (not (nil? accept-encoding))
-          (re-find #"gzip" accept-encoding))
+      (if (and body
+               (not (nil? accept-encoding))
+               (re-find #"gzip" accept-encoding))
         (do
           (doto (java.io.BufferedOutputStream.
                 (java.util.zip.GZIPOutputStream. out))
-                (.write (.getBytes (:body response)))
+                (.write (.getBytes body))
                 (.close))
 
           {:status (:status response)
@@ -66,15 +68,17 @@
                      "Content-Type" "text/html"
                      "Content-Encoding" "gzip")
            :body (java.io.ByteArrayInputStream. (.toByteArray out))})
-          response))))
+        response))))
+
+(defn add-gzip-middleware
+  []
+ (server/add-middleware wrap-gzip))
 
 (defn init
   []
   ; kick off endless data-sampler thread
   ; has to be called from noirmon.server/-main
-  (.start (Thread. data-sampler))
-  (server/add-middleware with-gzip))
-
+  (.start (Thread. data-sampler)))
 
 (defn get-mon-data
   [sname]

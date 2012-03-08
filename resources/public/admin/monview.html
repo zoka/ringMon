@@ -51,6 +51,7 @@
 
     var replSession="One";
     var cmdQ = createCommandQ();
+    var replPrinter;
 
     var replIn, replOut;
     var replHist = [];
@@ -86,7 +87,7 @@
 
       initEditor();
       $("#periodic").prop("checked", false); // make sure that periodic is initially uncheked
-                                             // if this is not done loading back from browser 
+                                             // if this is not done loading back from browser
                                              // history toggles it on/off
       $('#periodic').trigger('click');  // periodic data update on
       $("#irq").attr("disabled", true); // interrupt button disabled
@@ -139,7 +140,7 @@
 
       this.put = function (cid) {
         // only put command in the Q if not already there
-        console.log("put:" + cid);
+        //console.log("put:" + cid);
         var found = false;
         for (var i in q) {
           if (cid == q[i]) {
@@ -149,14 +150,14 @@
         }
         if (!found)
           q[q.length] = cid;
-        console.log("after put:" + q);
+        //console.log("after put:" + q);
         return !found; // return true if it was queued
       },
 
       this.remove = function (cid) {
-        console.log("remove:" + cid);
+        //console.log("remove:" + cid);
         q = remove(q,cid);
-        console.log("after remove:" + q);
+        //console.log("after remove:" + q);
         return( q.length == 0); // return true if Q was made empty
       },
 
@@ -304,6 +305,7 @@
       CodeMirror.keyMap.default["Ctrl-Down"]  = histFwd;
       CodeMirror.keyMap.default["Ctrl-Home"]  = clearEditor;
       CodeMirror.keyMap.default["Ctrl-End"]   = clearHistory;
+      replPrinter = createReplPrinter(replOut);
     }
 
     function clickGetMonData() {
@@ -342,39 +344,65 @@
         });
     }
 
-    function replPrint(e, mode, text) {
-      var cName = "";
-      switch (mode) {
-        case "out":
-          text = rtrim(text) ;
-          break;
-        case "err":
-          cName = "cm-error";
-          text = trim(text) ;
-          break;
-        case "ns":
-          text = trim(text) ;
-          break;
-        case "value":
-          text = rtrim(text) ;
-          cName = "cm-repl-val";
-          break;
-        case "code":
-          text = rtrim(text);
-          break;
+    function createReplPrinter (editor) {
+      var buf = "";
+      var theMode ="";
+      var e; //editor instance
+
+      e = editor;
+
+      this.print = function (mode, text) {
+        if (theMode == "")  // only one time init
+          theMode = mode;
+
+        if (mode != theMode) {
+          flush();
+          theMode = mode;
+          cName = "";
+        }
+
+        buf += text;
       }
 
-      bufferEnd(e);
-      var from = e.getCursor();
-      appendBuffer(e,text);
-      var to = e.getCursor();
+      this.flush = function () {
+        if (buf == "" || theMode == "")
+          return;
 
-      if (cName != "") {
-        e.markText(from, to, cName);
+        var cName = "";
+        switch (theMode) {
+          case "out":
+            buf = rtrim(buf) ;
+            break;
+          case "err":
+            cName = "cm-error";
+            buf = trim(buf) ;
+            break;
+          case "ns":
+            buf = trim(buf) ;
+            break;
+          case "value":
+            buf = rtrim(buf) ;
+            cName = "cm-repl-val";
+            break;
+          case "code":
+            buf = rtrim(buf);
+            break;
+        }
+
+        bufferEnd(e);
+        var from = e.getCursor();
+        appendBuffer(e, buf);
+        var to = e.getCursor();
+
+        if (cName != "") {
+          e.markText(from, to, cName);
+        }
+        // ommit trailing newline only for ns
+        if (theMode != "ns")
+          appendBuffer(e,"\n");
+        buf = "";
       }
-      // ommit trailing newline only for ns
-      if (mode != "ns")
-        appendBuffer(e,"\n");
+      return this;
     }
 
     function searchVec (v, text) {
@@ -388,7 +416,7 @@
     function respDoRepl(code, jdata) {
       var s = code;
       if (code != "")
-        replPrint(replOut,"code", code);
+        replPrinter.print("code", code);
 
       for (obj in jdata) {
         var val = jdata[obj];
@@ -397,39 +425,37 @@
         if ("out" in val) {
           var text = val["out"];
           s += text;
-          replPrint(replOut,"out", text);
+          replPrinter.print("out", text);
         }
         if ("ns" in val) {  // ask for ns befotr value
           var text = val["ns"] +"=>";
           s += text;
-          replPrint(replOut,"ns", text);
+          replPrinter.print("ns", text);
         }
         if ("value" in val) {
           var text = val["value"];
           s += text;
-          replPrint(replOut,"value", text);
+          replPrinter.print("value", text);
         }
         if ("err" in val) {
           var text = val["err"];
           s += text;
-          replPrint(replOut,"err", text);
+          replPrinter.print("err", text);
         }
         if ("status" in val) {
           var svec = val["status"];
           if (searchVec(svec,"interrupted")) {
-            replPrint(replOut, "err", "Interrupted");
+            replPrinter.print("err", "Interrupted");
           }
           if (searchVec(svec,"interrupt-id-mismatch")) {
-            replPrint(replOut, "err", "Interrupt operation failed");
+            replPrinter.print("err", "Interrupt operation failed");
           }
         }
         if ("pend" in val) {
           if (val["pend"]) {
             $("#irq").attr("disabled", false);   // enable interrupt button
-            console.log("enabled");
           } else {
             $("#irq").attr("disabled", true);   // disable interrupt button
-            console.log("disabled");
           }
         }
       }
@@ -438,6 +464,7 @@
         // schedule next request faster
         nReplPending = true;
       }
+      replPrinter.flush();
     }
 
     function doAjaxCmd(request) {

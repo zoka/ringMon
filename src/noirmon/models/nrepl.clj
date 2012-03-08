@@ -157,34 +157,35 @@
 
 (defn session-instance
   [timeout]
-  (let [conn     (connect)
-        client   (repl/client conn timeout) ; short timeout requirea (100 ms)
-        sid      (repl/new-session client)
-        client-msg (repl/client-session client :session sid)
-        cmdQ     (atom (clojure.lang.PersistentQueue/EMPTY))
+  (let [conn        (connect)
+        client      (repl/client conn timeout) ; short timeout required (10 ms)
+        sid         (repl/new-session client)
+        client-msg  (repl/client-session client :session sid)
+        cmd-q       (atom (clojure.lang.PersistentQueue/EMPTY))
         last-e (atom nil)
         do-resp (fn [resp] ; response is sequence of maps
                   "Take command response in and return it back with
                    appropriate pending indication. Examine every
-                   status field in response and remove 'done' commands
+                   status field in response and remove 'done' command ids
                    from the pending queue head."
-                  (loop [r resp pid (peek-q @cmdQ)]
+                  ;(println "resp " (count resp))
+                  (loop [r resp pid (peek-q @cmd-q)]
                     (if (empty? r)
                       (conj resp {:pend (not (nil? pid))})
                       (let [ e (first r)
                              s (:status e)]
                         (when s
                           (when (not= -1 (.indexOf s "done")) ; "done" is part of status?
-                            (if (= e @last-e)        ; spmetimed we get duplicate status messages
+                            (if (= e @last-e)        ; sometimes we get duplicate status messages
                               nil                          ; just recur (nil is placeholder of error handling)
                               (let [cid (:id e)]           ; else continue
                                 (reset! last-e e)
                                 (if-not pid
                                   nil
                                   (if (= cid pid)
-                                    (swap! cmdQ pop)
+                                    (swap! cmd-q pop)
                                     nil ))))))
-                        (recur (next r) (peek-q @cmdQ))))))]
+                        (recur (next r) (peek-q @cmd-q))))))]
     (FnSession.
       (fn poll []
         (do-resp (client)))
@@ -194,11 +195,11 @@
               ; before submitting it to nREPL server
               (client-msg (assoc cmd :session sid :id cid))
               (when-not (= (:op cmd) :interrupt)
-                (swap! cmdQ conj [cid cmd])); put in the Q if it is not interrupt command
+                (swap! cmd-q conj [cid cmd])); put in the Q if it is not interrupt command
               ;(println "submitted:" (assoc cmd :session sid :id cid))
               (let [r (client)]
                 (if (empty? r)
-                  [{:id cid} :pend true] ; if no immediate response in 100 ms,
+                  [{:id cid} :pend true] ; if no immediate response in 10 ms,
                                          ; just return command id and pending indication
                   (do-resp r)            ; else return nREPL response,
                                          ; containing command id anyway
@@ -206,7 +207,7 @@
       (fn get-id []
         sid)
       (fn get-pending []
-        (peek-q @cmdQ)))))
+        (peek-q @cmd-q)))))
 
 (defn active-session?
   [sid]
@@ -216,10 +217,10 @@
 
 (defn init-session
   []
-  "note: the low timeout value of 100ms for session means
+  "note: the low timeout value of 10 ms for session means
    that client will not stay blocked after submitting a
    long duration command such as '(Thread/sleep 1000)'"
-  (let [s (session-instance 100)]
+  (let [s (session-instance 10)]
     (when s
       (swap! sessions assoc (get-id s) s))
         (get-id s)))
