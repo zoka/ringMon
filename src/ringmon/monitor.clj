@@ -1,9 +1,7 @@
-(ns noirmon.views.monitor
-  (:require [noir.response :as resp]
-            [noir.server :as server]
-            [noirmon.models.nrepl :as repl]
-            [clojure.java.jmx :as jmx])
-  (:use [noir.core :only [defpage]]))
+(ns ringmon.monitor
+  (:require 
+            [ringmon.nrepl :as repl]
+            [clojure.java.jmx :as jmx]))
 
 
 (def cpu-load      (atom 0.0))
@@ -81,7 +79,8 @@
 
 (defn add-gzip-middleware
   []
- (server/add-middleware wrap-gzip))
+ ;(server/add-middleware wrap-gzip)
+ )
 
 (defn init
   []
@@ -125,15 +124,11 @@
       :repl-break   (repl/break  (:sess request))
       {:resp "bad-cmd"})))
 
-(defpage main "/ringmon"
-  []
-  (resp/redirect "/ringmon/monview.html"))
 
-
-(defpage ajax
-  [:get "/ringmon/command"] {:as params}
+(defn ajax
+  [params]
   (let [reply (decode-cmd params)]
-    (resp/json reply)))
+    reply))   ; convert to jason !!!
 
 
 

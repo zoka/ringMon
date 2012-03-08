@@ -1,9 +1,9 @@
-(ns noirmon.models.nrepl
+(ns ringmon.nrepl
   (:require [clojure.tools.nrepl.server    :as server]
             [clojure.tools.nrepl.misc      :as misc]
             [clojure.tools.nrepl.transport :as t]
             [clojure.tools.nrepl           :as repl]
-            [noir.cookies                  :as cookies]
+            [ringmon.cookies               :as cookies]
             [clojure.tools.nrepl.misc      :as repl.misc]
             [cheshire.core                 :as json]
             (clojure walk))
