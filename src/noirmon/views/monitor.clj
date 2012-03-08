@@ -45,30 +45,39 @@
                 real-nanos
                 ajax-reqs)))
 
+; based on https://github.com/mikejs/ring-gzip-middleware.git
+; just converted to use clojure.java.io from Clojure 1.3
+(defn gzipped-response
+  [resp]
+  (let [body (resp :body)
+        bout (java.io.ByteArrayOutputStream.)
+        out (java.util.zip.GZIPOutputStream. bout)
+        resp (assoc-in resp [:headers "content-encoding"] "gzip")]
+    (clojure.java.io/copy body out)
+    (.close out)
+    (if (instance? java.io.InputStream body)
+      (.close body))
+    (assoc resp :body (java.io.ByteArrayInputStream. (.toByteArray bout)))))
 
-;; gzip middlevare
-(defn wrap-gzip [handler]
-  (fn [request]
-    (let [response (handler request)
-          body     (:body response)
-          out      (java.io.ByteArrayOutputStream.)
-          accept-encoding (.get (:headers request) "accept-encoding")]
-
-      (if (and body
-               (not (nil? accept-encoding))
-               (re-find #"gzip" accept-encoding))
-        (do
-          (doto (java.io.BufferedOutputStream.
-                (java.util.zip.GZIPOutputStream. out))
-                (.write (.getBytes body))
-                (.close))
-
-          {:status (:status response)
-           :headers (assoc (:headers response)
-                     "Content-Type" "text/html"
-                     "Content-Encoding" "gzip")
-           :body (java.io.ByteArrayInputStream. (.toByteArray out))})
-        response))))
+(defn wrap-gzip
+  [handler]
+  (fn [req]
+    (let [{body :body
+           status :status
+           :as resp} (handler req)]
+      (if (and (= status 200)
+               (not (get-in resp [:headers "content-encoding"]))
+               (or
+                (and (string? body) (> (count body) 200))
+                (instance? java.io.InputStream body)
+                (instance? java.io.File body)))
+        (let [accepts (get-in req [:headers "accept-encoding"] "")
+              match (re-find #"(gzip|\*)(;q=((0|1)(.\d+)?))?" accepts)]
+          (if (and match (not (contains? #{"0" "0.0" "0.00" "0.000"}
+                                         (match 3))))
+            (gzipped-response resp)
+            resp))
+        resp))))
 
 (defn add-gzip-middleware
   []
