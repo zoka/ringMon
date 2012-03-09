@@ -5,7 +5,7 @@
             [clojure.tools.nrepl           :as repl]
             [ringmon.cookies               :as cookies]
             [clojure.tools.nrepl.misc      :as repl.misc]
-            [cheshire.core                 :as json]
+            [clj-json.core                 :as json]
             (clojure walk))
   (:import  (clojure.tools.nrepl.transport FnTransport)
              (java.util.concurrent

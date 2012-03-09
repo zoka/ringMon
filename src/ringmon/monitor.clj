@@ -1,6 +1,6 @@
 (ns ringmon.monitor
   (:require
-    [cheshire.core             :as json]
+    [clj-json.core             :as json]
     [ring.middleware.resource  :as res]
     [ring.middleware.params    :as param]
     [ring.middleware.file-info :as finfo]
@@ -9,7 +9,7 @@
     [ringmon.cookies           :as cookies]
     [clojure.java.jmx          :as jmx]))
 
-
+(def sampler-started    (atom false))
 (def cpu-load      (atom 0.0))
 (def ajax-reqs-ps  (atom 0.0))   ; ajax requests per second
 (def ajax-reqs-tot (atom 0))     ; total requests
@@ -26,6 +26,7 @@
 
 (defn data-sampler
   []
+  (reset! sampler-started true)
   (loop [process-nanos     (get-process-nanos)
          real-nanos        (System/nanoTime)
          ajax-reqs         @ajax-reqs-tot
@@ -41,7 +42,6 @@
 
          (reset! ajax-reqs-ps
                  (/ (- ajax-reqs old-ajax-reqs) 2.0))
-         (println "CPU load:" (format "%5.2f%%" @cpu-load))
          (recur (get-process-nanos)
                 (System/nanoTime)
                 @ajax-reqs-tot
@@ -83,22 +83,11 @@
             resp))
         resp))))
 
-(defn add-gzip-middleware
-  []
- ;(server/add-middleware wrap-gzip)
- )
-
-(defn init
-  []
-  ; kick off endless data-sampler thread
-  ; has to be called from noirmon.server/-main
-  (.start (Thread. data-sampler)))
-
 (defn get-mon-data
   [sname]
   (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
         mem (jmx/mbean "java.lang:type=Memory")
-        ; java.jmx returns Java arrays which repl/json can not handle
+        ; java.jmx returns Java arrays which json parser can not handle
         ; and thread id values are not interesting anyway
         th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)
         repl (repl/do-cmd "" sname)]
@@ -118,9 +107,10 @@
   (jmx/invoke "java.lang:type=Memory" :gc)
   {:resp "ok"})
 
-
 (defn decode-cmd
   [request]
+  (when-not @sampler-started
+   (.start (Thread. data-sampler)))
   (let [cmd (keyword (:cmd request))]
     (swap! ajax-reqs-tot inc)
     (case cmd
@@ -129,7 +119,6 @@
       :do-repl      (repl/do-cmd (:code request) (:sess request))
       :repl-break   (repl/break  (:sess request))
       {:resp "bad-cmd"})))
-
 
 (defn ajax
   [params]
