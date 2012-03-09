@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>noirMon</title>
+    <title>ringMon</title>
     <meta charset="utf-8">
     <script src="/ringmon/js/jquery-1.7.1.min.js"></script>
 
@@ -11,18 +11,21 @@
   </head>
 
   <body>
-    <button id="getmondata">Refresh Data</button>
-    <input type="checkbox" id="periodic" >Periodic (2 sec)</input>
-    <button id="dojvmgc" style="margin-left:25px;" >Force JVM GC</button>
-
-    <br></br>
-    <p>
-        <a href="http://webnoir.org/">Noir</a> (web framework written in
-        <a href="http://clojure.org/">Clojure</a>)
-        server app montoring demo (raw JMX and derived data).
+     <p>
+        This page has been injected by <b>ringMon</b>
+        <a href="https://github.com/mmcgrana/ring">Ring</a>
+        middleware. It provides hierarchical display of JMX and derived
+        application data and the front end to the
+        <a href="https://github.com/clojure/tools.nrepl">nREPL</a>
+        server that is running in the context of the remote
+        <a href="http://clojure.org/l">Clojure</a>
+        application instance.
         Get code at
         <a href="https://github.com/zoka/noirMon/">GitHub</a>.
     </p>
+    <button id="getmondata">Refresh Data</button>
+    <input type="checkbox" id="periodic" >Periodic (2 sec)</input>
+    <button id="dojvmgc" style="margin-left:25px;" >Force JVM GC</button>
 
     <table id="dataTree"
              border="0"
@@ -33,11 +36,12 @@
       </tbody>
     </table>
 
-    <span>nREPL output</span>
+    <span><b>nREPL Output</b></span>
     <button id="irq" style="margin-left:25px;">Interrupt</button>
     <textarea id="ClojOut">
     </textarea>
-    <span>nREPL input. Ctrl-Enter to submit the current buffer/selection.
+    <span><b>nREPL Input</b></span>
+    <span style="margin-left:10px;">Ctrl-Enter to submit the current buffer/selection.
           Ctrl-Up and Ctrl-Down to browse history.
           Ctrl-Home to clear REPL windows. Ctrl-End to clear history.</span>
     <textarea id="Cloj">

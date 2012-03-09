@@ -2,13 +2,15 @@
 
 Preliminary - not ready yet.
 
-Ring handler that injects single monitoring page into any Clojure webb application 
-based on Ring or higher level libraries use Rimg themselves.
-The page displays raw JMX data of interest. It also
+Ring middleware that injects single monitoring page into any Clojure web application
+based on Ring or higher level libraries use Ring themselves.
+The page displays raw JMX data of interest in tree alike structure. It also shows
 derived values such as CpuLoad that is calculated by sampling JMX/OperatingSystem.ProcessCpuTime every
 2 secondsand and Ajax requests statistics.
 Monitoring data in JSON form is fetched from Noir server app either periodically or at user request.
-It is also possible to force JVM garbage collection. 
+It is also possible to force JVM garbage collection.
+
+Moreover, the page provides full featured nREPL front end with synax colored editor, command history and persistent sessions.
 
 Adding this page to existing Ring based application should be easy.
 

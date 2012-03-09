@@ -1,7 +1,13 @@
 (ns ringmon.monitor
-  (:require 
-            [ringmon.nrepl :as repl]
-            [clojure.java.jmx :as jmx]))
+  (:require
+    [cheshire.core             :as json]
+    [ring.middleware.resource  :as res]
+    [ring.middleware.params    :as param]
+    [ring.middleware.file-info :as finfo]
+    [ring.util.response        :as response]
+    [ringmon.nrepl             :as repl]
+    [ringmon.cookies           :as cookies]
+    [clojure.java.jmx          :as jmx]))
 
 
 (def cpu-load      (atom 0.0))
@@ -35,7 +41,7 @@
 
          (reset! ajax-reqs-ps
                  (/ (- ajax-reqs old-ajax-reqs) 2.0))
-
+         (println "CPU load:" (format "%5.2f%%" @cpu-load))
          (recur (get-process-nanos)
                 (System/nanoTime)
                 @ajax-reqs-tot
@@ -127,8 +133,26 @@
 
 (defn ajax
   [params]
-  (let [reply (decode-cmd params)]
-    reply))   ; convert to jason !!!
+  (let [reply    (decode-cmd params)
+        j-reply  (json/generate-string reply)]
+    j-reply))
 
+(defn wrap-ajax
+  [handler]
+  (fn [req]
+    (let [uri (:uri req)]
+      (if (= uri "/ringmon/command")
+        (let [params (clojure.walk/keywordize-keys (:query-params req))]
+          (response/response(ajax params)))
+        (handler req)))))
 
+(defn wrap-ring-monitor
+  [handler]
+  (-> handler
+      (res/wrap-resource "public")
+      (finfo/wrap-file-info)
+      (wrap-gzip)                   ; gzip must be after wrap-resource!
+      (wrap-ajax)
+      (cookies/wrap-noir-cookies)
+      (param/wrap-params)))
 
