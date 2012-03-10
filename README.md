@@ -16,6 +16,9 @@ Adding this page to existing Ring based application should be easy.
 Note that for real life application such a page should be protected by admin access password, since it can
 be used to inflict some serious DOS damage to your server.
 
+You can see ringMon in action in this Noir application 
+on [noirMon at Heroku](http://noirmon.herokuapp.com/).
+
 ## Usage (for local test)
 
 ```bash
@@ -37,13 +40,13 @@ In case of bare Ring application such as this one the follwing is needed:
       [ring.adapter.jetty       :as jetty]))
 
 (defn demo [req]
-    (let [headers  (:headers req)
-          hostname (get headers "host")
-          uri      (:uri req)]
-      (if (or (= uri "/") (= uri "/favicon.ico"))
-        {:status 200
-         :headers {"Content-Type" "text/html"}
-         :body "Hello"})))
+  (let [headers  (:headers req)
+        hostname (get headers "host")
+        uri      (:uri req)]
+    (if (or (= uri "/") (= uri "/favicon.ico"))
+      {:status 200
+       :headers {"Content-Type" "text/html"}
+       :body "Hello"})))
 
 (def handler
   (-> demo
