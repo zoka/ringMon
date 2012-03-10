@@ -241,17 +241,19 @@
 
 (defn get-active-browser-sessions
   []
-   (let [s (cookies/get :repl-sess)
-         m (json/parse-string s)]
-    (if-not (map? m)
+  (let [s (cookies/get :repl-sess)]
+    (if (= s nil)
       {}
-      (loop [r {} m m]
-        (if (empty? m)
-          r
-          (let [[name sid] (first m)]
-            (if (active-session? sid)
-              (recur (assoc r name sid) (rest m))
-              (recur r (rest m)))))))))
+      (let [m (json/parse-string s)]
+        (if-not (map? m)
+          {}
+          (loop [r {} m m]
+            (if (empty? m)
+              r
+              (let [[name sid] (first m)]
+                (if (active-session? sid)
+                  (recur (assoc r name sid) (rest m))
+                  (recur r (rest m)))))))))))
 
 (defn get-sess-id
   [sname]
