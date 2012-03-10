@@ -5,17 +5,21 @@ Ring middleware that injects single monitoring page into any Clojure web applica
 based on Ring or web frameworks such as Noir or Compojure.
 The page displays raw JMX data of interest in tree alike structure. It also shows
 derived values such as CpuLoad that is calculated by sampling JMX/OperatingSystem.ProcessCpuTime every
-2 secondsand and Ajax requests statistics.
-Monitoring data in JSON form is fetched from Noir server app either periodically or at user request.
+2 seconds and Ajax requests statistics.
+Monitoring data in JSON form is fetched from Noir server app either periodically or 
+at user request.
 It is also possible to force JVM garbage collection.
 
-Moreover, the page provides full featured nREPL front end with synax colored editor, command history and persistent sessions.
+Moreover, the page provides full featured 
+[nREPL](https://github.com/clojure/tools.nrepl) 
+front end with syntax colored editor, command history and persistent sessions.
 
 Note that for real life application such a page should be protected by admin access password, since it can
-be used to inflict some serious DOS damage to your server.
+be used to inflict some serious DOS damage to your server. Some sort of authentication
+interface is planned for later.
 
 You can see ringMon in action in this Noir application 
-on [noirMon at Heroku](http://noirmon.herokuapp.com/).
+at [noirMon at Heroku](http://noirmon.herokuapp.com/).
 
 ## Usage (for local test)
 
