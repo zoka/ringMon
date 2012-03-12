@@ -33,7 +33,7 @@ If you want to include ringMon in your leiningen project, simply add this to you
  [noirmon "0.1.0-SNAPSHOT"]
 ```
 
-In case of bare Ring application such as this one the follwing is needed:
+In case of bare Ring application such as this one, the following is needed:
 
 ```clojure
 (ns ringmon.server
