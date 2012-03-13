@@ -4,11 +4,9 @@
 Ring middleware that injects single monitoring page into any Clojure web application
 based on Ring or web frameworks such as Noir or Compojure.
 The page displays raw JMX data of interest in tree alike structure. It also shows
-derived values such as CpuLoad that is calculated by sampling JMX/OperatingSystem.ProcessCpuTime every
-2 seconds and Ajax requests statistics.
-Monitoring data in JSON form is fetched from Noir server app either periodically or 
-at user request.
-It is also possible to force JVM garbage collection.
+derived values such as CPU load that is calculated by sampling JMX property OperatingSystem.ProcessCpuTime every
+2 seconds, AJAX request statistics and the session count.It is also possible
+to force JVM garbage collection.
 
 Moreover, the page provides full featured 
 [nREPL](https://github.com/clojure/tools.nrepl) 
@@ -30,7 +28,7 @@ lein run
 If you want to include ringMon in your leiningen project, simply add this to your dependencies:
 
 ```clojure
- [noirmon "0.1.0-SNAPSHOT"]
+ [ringmon "0.1.0-SNAPSHOT"]
 ```
 
 In case of bare Ring application such as this one, the following is needed:
