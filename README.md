@@ -1,11 +1,10 @@
 # ringMon
 
-
 Ring middleware that injects single monitoring page into any Clojure web application
 based on Ring or web frameworks such as Noir or Compojure.
 The page displays raw JMX data of interest in tree alike structure. It also shows
 derived values such as CPU load that is calculated by sampling JMX property OperatingSystem.ProcessCpuTime every
-2 seconds, AJAX request statistics and the session count. It is also possible
+2 second and AJAX request statistics. It is also possible
 to force JVM garbage collection.
 
 Moreover, the page provides full featured 
