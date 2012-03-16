@@ -91,24 +91,25 @@
   (select-keys @the-cfg [:fast-poll :norm-poll]))
 
 (defn get-mon-data
-  [sname]
+  [sname remote-ip]
   (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
         mem (jmx/mbean "java.lang:type=Memory")
         ; java.jmx returns Java arrays which json parser can not handle
         ; and thread id values are not interesting anyway
         th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)
-        repl (repl/do-cmd "" sname)]
+        sessions (repl/session-stats)
+        repl (repl/do-cmd "" sname remote-ip)]
 
         {:Application
           {:CpuLoad           (format "%5.2f%%" @cpu-load)
            :AjaxReqsTotal     @ajax-reqs-tot
-           :AjaxReqsPerSec    (format "%7.2f" @ajax-reqs-ps)
-           :nReplSessions     (repl/get-sess-count)}
-           :OperatingSystem   os
-           :Memory            mem
-           :Threading         th
-           :nREPL repl
-           :config (extract-config)}))
+           :AjaxReqsPerSec    (format "%7.2f" @ajax-reqs-ps)}
+          :OperatingSystem   os
+          :Memory            mem
+          :Threading         th
+          :Sessions          sessions
+          :nREPL repl
+          :config (extract-config)}))
 
 (defn do-jvm-gc
   []
@@ -116,21 +117,21 @@
   {:resp "ok"})
 
 (defn decode-cmd
-  [request]
+  [request remote-ip]
   (when-not @sampler-started
-   (.start (Thread. data-sampler)))
+    (.start (Thread. data-sampler)))
   (let [cmd (keyword (:cmd request))]
     (swap! ajax-reqs-tot inc)
     (case cmd
-      :get-mon-data (get-mon-data (:sess request))
+      :get-mon-data (get-mon-data (:sess request) remote-ip)
       :do-jvm-gc    (do-jvm-gc)
-      :do-repl      (repl/do-cmd (:code request) (:sess request))
-      :repl-break   (repl/break  (:sess request))
+      :do-repl      (repl/do-cmd (:code request) (:sess request) remote-ip)
+      :repl-break   (repl/break  (:sess request) remote-ip)
       {:resp "bad-cmd"})))
 
 (defn ajax
-  [params]
-  (let [reply    (decode-cmd params)
+  [params remote-ip]
+  (let [reply    (decode-cmd params remote-ip)
         j-reply  (json/generate-string reply)]
     j-reply))
 
@@ -139,8 +140,9 @@
   (fn [req]
     (let [uri (:uri req)]
       (if (= uri "/ringmon/command")
-        (let [params (clojure.walk/keywordize-keys (:query-params req))]
-          (response/response(ajax params)))
+        (let [params (clojure.walk/keywordize-keys (:query-params req))
+             remote-ip (:remote-addr req)]
+          (response/response(ajax params remote-ip)))
         (handler req)))))
 
 (defn wrap-ring-monitor
