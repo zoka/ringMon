@@ -1,5 +1,6 @@
 (ns ringmon.monitor
   (:require
+    [clojure.string            :as string]
     [clj-json.core             :as json]
     [ring.middleware.resource  :as res]
     [ring.middleware.params    :as param]
@@ -16,6 +17,8 @@
 (def cpu-load      (atom 0.0))
 (def ajax-reqs-ps  (atom 0.0))   ; ajax requests per second
 (def ajax-reqs-tot (atom 0))     ; total requests
+
+(def last-request (atom {}))
 
 (def ^:const sample-interval 2000) ; msec
 
@@ -91,14 +94,14 @@
   (select-keys @the-cfg [:fast-poll :norm-poll]))
 
 (defn get-mon-data
-  [sname remote-ip]
+  [sname client-ip]
   (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
         mem (jmx/mbean "java.lang:type=Memory")
         ; java.jmx returns Java arrays which json parser can not handle
         ; and thread id values are not interesting anyway
         th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)
         sessions (repl/session-stats)
-        repl (repl/do-cmd "" sname remote-ip)]
+        repl (repl/do-cmd "" sname client-ip)]
 
         {:Application
           {:CpuLoad           (format "%5.2f%%" @cpu-load)
@@ -117,23 +120,31 @@
   {:resp "ok"})
 
 (defn decode-cmd
-  [request remote-ip]
+  [request client-ip]
   (when-not @sampler-started
     (.start (Thread. data-sampler)))
   (let [cmd (keyword (:cmd request))]
     (swap! ajax-reqs-tot inc)
     (case cmd
-      :get-mon-data (get-mon-data (:sess request) remote-ip)
+      :get-mon-data (get-mon-data (:sess request) client-ip)
       :do-jvm-gc    (do-jvm-gc)
-      :do-repl      (repl/do-cmd (:code request) (:sess request) remote-ip)
-      :repl-break   (repl/break  (:sess request) remote-ip)
+      :do-repl      (repl/do-cmd (:code request) (:sess request) client-ip)
+      :repl-break   (repl/break  (:sess request) client-ip)
       {:resp "bad-cmd"})))
 
 (defn ajax
-  [params remote-ip]
-  (let [reply    (decode-cmd params remote-ip)
+  [params client-ip]
+  (let [reply    (decode-cmd params client-ip)
         j-reply  (json/generate-string reply)]
     j-reply))
+
+(defn get-client-ip
+  [req]
+  (let [hdrs  (:headers req)
+        xfwd  (get hdrs "x-forwarded-for")]
+    (if xfwd
+      (first (string/split xfwd #","))
+      (:remote-addr req))))
 
 (defn wrap-ajax
   [handler]
@@ -141,8 +152,9 @@
     (let [uri (:uri req)]
       (if (= uri "/ringmon/command")
         (let [params (clojure.walk/keywordize-keys (:query-params req))
-             remote-ip (:remote-addr req)]
-          (response/response(ajax params remote-ip)))
+             client-ip (get-client-ip req)]
+          (reset! last-request req) ; for debugging, is easy do read from REPL
+          (response/response(ajax params client-ip)))
         (handler req)))))
 
 (defn wrap-ring-monitor

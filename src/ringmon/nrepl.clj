@@ -235,7 +235,7 @@
   (get-stats [this sid] "Returns stats map"))
 
 (defrecord SessionInfo [sess
-                        remote-host
+                        client-host
                         last-code
                         last-req-time
                         last-cmd-time
@@ -244,8 +244,8 @@
   (get-stats [this id]
     (let [now (System/currentTimeMillis)
           lc  (first-line last-code)]
-      {:Id         (uuid-last id)
-       :RemoteHost remote-host
+      {:id         (uuid-last id)
+       :ClientHost client-host
        :LastCode   lc
        :LastReq    (format "%7.3f sec ago" (/ (- now last-req-time) 1000.0))
        :LastCmd    (format "%7.3f sec ago" (/ (- now last-cmd-time) 1000.0))
@@ -272,14 +272,14 @@
     r))
 
 (defn init-session
-  [remote-ip]
+  [client-ip]
  "note: the low timeout value of 10 ms for session means
   that client will not stay blocked after submitting a
   long duration command such as '(Thread/sleep 1000)'"
   (let [s   (session-instance 10)]
     (when (and s (get-id s))
       (let [now (System/currentTimeMillis)
-            ia  (InetAddress/getByName remote-ip)
+            ia  (InetAddress/getByName client-ip)
             rh  (.getCanonicalHostName ia)
             si  (SessionInfo. s rh " \n" now now 0)]
         (swap! sessions assoc (get-id s) si))
@@ -287,7 +287,7 @@
           (get-id s))))
 
 (defn session-put
-  [sid cmd remote-ip]
+  [sid cmd client-ip]
   (let [s (:sess (get @sessions sid))]
     (when s
       (locking s
@@ -295,14 +295,14 @@
               tops (:total-ops si)]
           (swap! sessions assoc sid
             (assoc si
-              :remote-ip     remote-ip
+              :client-ip     client-ip
               :last-code     (:code cmd)
               :last-cmd-time (System/currentTimeMillis)
               :total-ops     (inc tops)))))
       (put s cmd))))
 
 (defn session-poll
-  [sid remote-ip]
+  [sid client-ip]
   (let [s (:sess (get @sessions sid))]
     (when s
       (locking s
@@ -310,7 +310,7 @@
               tops (:total-ops si)]
           (swap! sessions assoc sid
             (assoc si
-              :remote-ip     remote-ip
+              :client-ip     client-ip
               :last-req-time (System/currentTimeMillis)
               :total-ops     (inc tops)))))
       (poll s))))
@@ -334,11 +334,11 @@
                   (recur r (rest m)))))))))))
 
 (defn get-sess-id
-  [sname remote-ip]
+  [sname client-ip]
   (let [as  (get-active-browser-sessions)
         sid (get as sname)]
     (if-not sid
-      (let [new-sid (init-session remote-ip)
+      (let [new-sid (init-session client-ip)
             new-as  (assoc as sname new-sid)
             cval (json/generate-string new-as)]
         ;(println "new session map id (valid 30 days):" cval sname)
@@ -349,14 +349,14 @@
       sid)))
 
 (defn do-cmd
-  [code sname remote-ip]
-  (let [sid (get-sess-id sname remote-ip)]
+  [code sname client-ip]
+  (let [sid (get-sess-id sname client-ip)]
     (when-not (= sid "")
       (if (not= code "")
-        (let [r (session-put sid {:op :eval :code code} remote-ip)]
+        (let [r (session-put sid {:op :eval :code code} client-ip)]
           ;(println "put response:"r)
           r)
-        (let [r (session-poll sid remote-ip)]
+        (let [r (session-poll sid client-ip)]
           ;(when-not (empty? r) (println "bkg polled:" r))
           r)))))
 
@@ -366,8 +366,8 @@
     r))
 
 (defn break
-  [sname remote-ip]
-  (let [sid (get-sess-id sname remote-ip)]
+  [sname client-ip]
+  (let [sid (get-sess-id sname client-ip)]
     (when-not (= sid "")
       (let [s (:sess (get @sessions sid))]
         (when s
