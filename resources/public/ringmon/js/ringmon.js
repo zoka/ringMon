@@ -14,14 +14,14 @@
 
 (function($){
 
-  var DOWN = 'mousedown touchstart', 
-      MOVE = 'mousemove touchmove', 
+  var DOWN = 'mousedown touchstart',
+      MOVE = 'mousemove touchmove',
       STOP = 'mouseup touchend',
       E, M = {};
 
   function xy(v) {
-    var y = v.pageY, 
-        x = v.pageX, 
+    var y = v.pageY,
+        x = v.pageX,
         t = v.originalEvent.targetTouches;
     if(t) {
       x = t[0]['pageX'];
@@ -53,7 +53,7 @@
     var p = xy(v), f = function(k) { return parseInt(E.css(k))||false; };
     E = toTop(v.data.e);
     M = {
-      X:f('left')||0, Y:f('top')||0, 
+      X:f('left')||0, Y:f('top')||0,
       W:f('width')||E[0].scrollWidth||0, H:f('height')||E[0].scrollHeight||0,
       pX:p.x, pY:p.y, k:v.data.k, o:E.css('opacity')
     };
@@ -64,7 +64,7 @@
 
   function onGripDrag(v) {
     var p = xy(v);
-    if(M.k == 'move') { 
+    if(M.k == 'move') {
       if(!E.css('position').match(/absolute|fixed/)) {
         E.css({position:'relative'});
       }
@@ -86,18 +86,19 @@
 
 })(jQuery);
 
+var fastPoll = 500;
+var normPoll = 2000;
 var flagPeriodic = false;
 var lastAjaxRequestTime = 0;
 var nReplPending = false;
 
 var replSession="One";
-var cmdQ = createCommandQ();
 var replPrinter;
 
 var replIn, replOut;
 var replHist = [];
-var nextHistNdx = 0;
-var ndxHist = 0;
+var nextHistNdx;
+var ndxHist ;
 
 var annMonData = {}; // annotated JSON of monitoring data, adding __hidden: true
                      // into object data will colapse it on display
@@ -110,11 +111,12 @@ $(document).ready(function() {
   $("#getmondata").click(clickGetMonData);
   $("#dojvmgc").click(clickDoJvmGc);
   $("#irq").click(replBreak);
+  $("#submit").click(clickReplSubmit);
 
   // initial refresh
   clickGetMonData();
 
- // periodic checkbox data refredh
+ // periodic checkbox data refresh
   $('#periodic').on('change', function () {
     if ($(this).is(':checked')) {
       flagPeriodic = true;
@@ -135,6 +137,10 @@ $(document).ready(function() {
 });
 
 
+function clickReplSubmit() {
+  replSubmit(replIn);
+}
+
 function trim(stringToTrim) {
   return stringToTrim.replace(/^\s+|\s+$/g,"");
 }
@@ -144,6 +150,20 @@ function ltrim(stringToTrim) {
 function rtrim(stringToTrim) {
   return stringToTrim.replace(/\s+$/,"");
 }
+
+function validateConfig(obj) {
+  if (isObject(obj)) {
+    var fPoll = obj["fast-poll"];
+    var nPoll = obj["norm-poll"];
+    if (nPoll >= 200 && nPoll <= 2000 &&
+        fPoll >= 200 && fPoll <= 500  &&
+        fPoll <= nPoll)
+
+      normPoll = nPoll;
+      fastPoll = fPoll;
+  }
+}
+
 
 function replRefresh(){
   // same command, but empty code buffer
@@ -163,52 +183,6 @@ function replBreak() {
     cmd: "repl-break",
     sess: replSession
   });
-}
-
-function createCommandQ() {
-  var q = []; // head at array start
-  var pend = 0;   // index of the command in the Q that is pending
-  var that = this;  //
-
-  function remove (q, cid) {
-    var r = [];
-    var j = 0;
-    for (var i in q)
-      if (q[i] != cid)
-        r[j++] = q[i];
-    return r;
-  }
-
-  this.put = function (cid) {
-    // only put command in the Q if not already there
-    //console.log("put:" + cid);
-    var found = false;
-    for (var i in q) {
-      if (cid == q[i]) {
-        found = true;
-        break;
-      }
-    }
-    if (!found)
-      q[q.length] = cid;
-    //console.log("after put:" + q);
-    return !found; // return true if it was queued
-  },
-
-  this.remove = function (cid) {
-    //console.log("remove:" + cid);
-    q = remove(q,cid);
-    //console.log("after remove:" + q);
-    return( q.length == 0); // return true if Q was made empty
-  },
-
-  this.getPendingCid = function () {
-    if (q.length)
-      return q[pend];
-    else
-      return "";
-  }
-  return this;
 }
 
 function replSubmit(e) {
@@ -315,7 +289,7 @@ function clearHistory(e) {
 var clojScript =
 
      "(loop [i 0]"
-+ "\n" + '  (println \"i=\"i)'
++ "\n" + '  (println \"i =\"i)'
 + "\n" + "  (Thread/sleep 1000)"
 + "\n" + "  (if (< i 10)"
 + "\n" + "    (recur (inc i))"
@@ -341,6 +315,12 @@ function initEditor() {
   replOut.setValue("");
   replIn.setValue(clojScript);
 
+  // initial state of history - clojScript is already in
+  // so Ctrl-Down will produce blank screen
+  replHist[0] = clojScript;
+  nextHistNdx = 1;
+  ndxHist = 0;
+
   CodeMirror.keyMap.default["Ctrl-Enter"] = replSubmit;
   CodeMirror.keyMap.default["Ctrl-Up"]    = histBack;
   CodeMirror.keyMap.default["Ctrl-Down"]  = histFwd;
@@ -365,16 +345,16 @@ function periodicGetMonData() {
   if (nReplPending) {
     nReplPending = false;
     clickGetMonData();
-    setTimeout(periodicGetMonData, 500);
+    setTimeout(periodicGetMonData, fastPoll);
     return;
   }
 
   if (!flagPeriodic)
     return;
   var delta = getMsec() - lastAjaxRequestTime;
-  if ( delta > 2000)
+  if ( delta > normPoll)
     clickGetMonData();
-  setTimeout(periodicGetMonData, 2000);  // issue periodic request every 2 seconds if enabled
+  setTimeout(periodicGetMonData, normPoll);  // issue periodic request every normPoll msec if enabled
 }
 
 function clickDoJvmGc() {
@@ -386,9 +366,9 @@ function clickDoJvmGc() {
 }
 
 function createReplPrinter (editor) {
-  var buf = "";
-  var theMode ="";
-  var e; //editor instance
+  var theMode ="";  // current output mode
+  var buf = "";     // text in 'theMode' buffered so far
+  var e;            // editor instance
 
   e = editor;
 
@@ -399,9 +379,7 @@ function createReplPrinter (editor) {
     if (mode != theMode) {
       flush();
       theMode = mode;
-      cName = "";
     }
-
     buf += text;
   }
 
@@ -634,6 +612,11 @@ function makeTbl(s, jdata, ident) {
       respDoRepl("", jdata[name]);
       continue;         // skip nREPL
     }
+    if (name == "config") {
+      var val = jdata[name];
+      validateConfig(val);
+      continue;         // skip config
+    }
     var val = jdata[name];
     if (!isObject(val)) {
       if (name != "__hidden")  // do not show hidden field, it is only for internal use
@@ -656,7 +639,6 @@ function isEmpty(obj) {
     return false;
   return true;
 }
-
 
 function annotateJson(fresh, ann) {
   var init = false;

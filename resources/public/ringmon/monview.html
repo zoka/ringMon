@@ -24,7 +24,7 @@
         <a href="https://github.com/zoka/ringMon/">GitHub</a>.
     </p>
     <button id="getmondata">Refresh Data</button>
-    <input type="checkbox" id="periodic" >Periodic (2 sec)</input>
+    <input type="checkbox" id="periodic" >Periodic </input>
     <button id="dojvmgc" style="margin-left:25px;" >Force JVM GC</button>
 
     <table id="dataTree"
@@ -37,13 +37,14 @@
     </table>
 
     <span><b>nREPL Output</b></span>
-    <button id="irq" style="margin-left:25px;">Interrupt</button>
+    <button id="irq" style="margin-left:20px;">Interrupt</button>
     <textarea id="ClojOut">
     </textarea>
     <span><b>nREPL Input</b></span>
     <span style="margin-left:10px;">Ctrl-Enter to submit the current buffer/selection.
           Ctrl-Up and Ctrl-Down to browse history.
           Ctrl-Home to clear REPL windows. Ctrl-End to clear history.</span>
+    <button id="submit" style="margin-left:10px;">Submit</button>
     <textarea id="Cloj">
     </textarea>
 

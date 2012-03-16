@@ -155,11 +155,29 @@
         (println (get e 1))
         (recur (dec n) (inc i))))))
 
+(defn my-new-session
+ "This is a mirror of repl/new-session, so it can be observed why it sometimes
+  throws an exception. When nil reply is received simply try again."
+  [client]
+  (loop [c 10]
+    (let [resp (first (repl/message client {:op :clone}))
+          r    (:new-session resp)]
+      (if r
+        r
+        (if (zero? c)
+          (do
+            (println "Giving up on new-session")
+            nil)
+          (do
+            ;(println "Retrying new-session," c "tries to go.")
+            (Thread/sleep 10)
+            (recur (dec c))))))))
+
 (defn session-instance
   [timeout]
   (let [conn        (connect)
         client      (repl/client conn timeout) ; short timeout required (10 ms)
-        sid         (repl/new-session client)
+        sid         (my-new-session client)
         client-msg  (repl/client-session client :session sid)
         cmd-q       (atom (clojure.lang.PersistentQueue/EMPTY))
         last-e (atom nil)
@@ -221,8 +239,9 @@
    that client will not stay blocked after submitting a
    long duration command such as '(Thread/sleep 1000)'"
   (let [s (session-instance 10)]
-    (when s
+    (when (and s (get-id s))
       (swap! sessions assoc (get-id s) s))
+        ;(println "init-session:" (get-id s) "\n" @sessions)
         (get-id s)))
 
 (defn session-put

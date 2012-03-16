@@ -9,6 +9,9 @@
     [ringmon.cookies           :as cookies]
     [clojure.java.jmx          :as jmx]))
 
+(def the-cfg (atom {:fast-poll 500
+                    :norm-poll 2000}))   ; middleware config
+
 (def sampler-started    (atom false))
 (def cpu-load      (atom 0.0))
 (def ajax-reqs-ps  (atom 0.0))   ; ajax requests per second
@@ -83,6 +86,10 @@
             resp))
         resp))))
 
+(defn extract-config
+  []
+  (select-keys @the-cfg [:fast-poll :norm-poll]))
+
 (defn get-mon-data
   [sname]
   (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
@@ -100,7 +107,8 @@
            :OperatingSystem   os
            :Memory            mem
            :Threading         th
-           :nREPL repl}))
+           :nREPL repl
+           :config (extract-config)}))
 
 (defn do-jvm-gc
   []
@@ -137,11 +145,19 @@
 
 (defn wrap-ring-monitor
   [handler]
-  (-> handler
-      (res/wrap-resource "public")
-      (finfo/wrap-file-info)
-      (wrap-gzip)                   ; gzip must be after wrap-resource!
-      (wrap-ajax)
-      (cookies/wrap-noir-cookies)
-      (param/wrap-params)))
 
+  (if (:local-repl @the-cfg)
+    handler    ;; no need to wrap, it was already wraped into local jetty server
+
+    (-> handler
+        (res/wrap-resource "public")
+        (finfo/wrap-file-info)
+        (wrap-gzip)                   ; gzip must be after wrap-resource!
+        (wrap-ajax)
+        (cookies/wrap-noir-cookies)
+        (param/wrap-params))))
+
+(defn merge-cfg
+  [cfg]
+  (when (map? cfg)
+    (swap! the-cfg merge cfg)))
