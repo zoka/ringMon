@@ -10,8 +10,16 @@
     [ringmon.cookies           :as cookies]
     [clojure.java.jmx          :as jmx]))
 
-(def the-cfg (atom {:fast-poll 500
-                    :norm-poll 2000}))   ; middleware config
+; the middleware configuration
+(def the-cfg (atom
+  {:local-repl nil      ; running on local machine on separate Jetty instance
+   :local-port nil      ; on this port (if set to zero, will be auto selected)
+                        ; those local- prefixed values are set in ringmon.server
+   :fast-poll  500      ; browser poll when there is REPL output activity
+   :norm-poll  2000     ; normal browser poll time
+   :disabled   nil      ; general disable, if true check :the auth-fn
+   :auth-fn    nil}))   ; authorisation calback, checked only if :disabled is true
+                        ; will be passed the Ring request, return true if Ok
 
 (def sampler-started    (atom false))
 (def cpu-load      (atom 0.0))
@@ -146,22 +154,41 @@
       (first (string/split xfwd #","))
       (:remote-addr req))))
 
+(defn ringmon-req?
+  [uri]
+  (or (= uri "/ringmon/command")
+      (= uri "/ringmon/monview.html")))
+
+(defn ringmon-allowed?
+  [req]
+  (if (:disabled @the-cfg)
+    (if-let [auth-fn (:auth-fn @the-cfg)]
+      (if (fn? auth-fn)
+        (auth-fn req)
+        nil)
+      nil)
+    true))
+
 (defn wrap-ajax
   [handler]
   (fn [req]
     (let [uri (:uri req)]
-      (if (= uri "/ringmon/command")
-        (let [params (clojure.walk/keywordize-keys (:query-params req))
-             client-ip (get-client-ip req)]
-          (reset! last-request req) ; for debugging, is easy do read from REPL
-          (response/response(ajax params client-ip)))
-        (handler req)))))
+      (if (ringmon-req? uri)
+        (if (ringmon-allowed? req)
+          (if (= uri "/ringmon/command")
+            (let [params (clojure.walk/keywordize-keys (:query-params req))
+                 client-ip (get-client-ip req)]
+              (reset! last-request req) ; for debugging, is easy do read from REPL
+              (response/response(ajax params client-ip)))
+            (handler req))
+          (response/response "Not allowed"))
+      (handler req)))))
 
 (defn wrap-ring-monitor
   [handler]
 
   (if (:local-repl @the-cfg)
-    handler    ;; no need to wrap, it was already wraped into local jetty server
+    handler  ;no need to wrap, it was already wrapped into local jetty server
 
     (-> handler
         (res/wrap-resource "public")

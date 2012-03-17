@@ -235,6 +235,7 @@
   (get-stats [this sid] "Returns stats map"))
 
 (defrecord SessionInfo [sess
+                        sname
                         client-host
                         last-code
                         last-req-time
@@ -244,12 +245,13 @@
   (get-stats [this id]
     (let [now (System/currentTimeMillis)
           lc  (first-line last-code)]
-      {:id         (uuid-last id)
-       :ClientHost client-host
-       :LastCode   lc
-       :LastReq    (format "%7.3f sec ago" (/ (- now last-req-time) 1000.0))
-       :LastCmd    (format "%7.3f sec ago" (/ (- now last-cmd-time) 1000.0))
-       :TotalOps   total-ops})))
+      {:Client   client-host
+       :Name     sname
+       :Id       (uuid-last id)
+       :LastCode lc
+       :LastReq  (format "%7.3f sec ago" (/ (- now last-req-time) 1000.0))
+       :LastCmd  (format "%7.3f sec ago" (/ (- now last-cmd-time) 1000.0))
+       :TotalOps total-ops})))
 
 (def sessions (atom {}))  ;; active sessions map
 
@@ -263,7 +265,7 @@
   (let [svec (into []
         (for [[sid ss] @sessions] (get-stats ss sid)))]
      {:Count (get-sess-count)
-      :SessionRecords svec}))
+      :Info svec}))
 
 (defn active-session?
   [sid]
@@ -272,7 +274,7 @@
     r))
 
 (defn init-session
-  [client-ip]
+  [client-ip sname]
  "note: the low timeout value of 10 ms for session means
   that client will not stay blocked after submitting a
   long duration command such as '(Thread/sleep 1000)'"
@@ -281,7 +283,7 @@
       (let [now (System/currentTimeMillis)
             ia  (InetAddress/getByName client-ip)
             rh  (.getCanonicalHostName ia)
-            si  (SessionInfo. s rh " \n" now now 0)]
+            si  (SessionInfo. s sname rh " \n" now now 0)]
         (swap! sessions assoc (get-id s) si))
           ;(println "init-session:" (get-id s) "\n" @sessions)
           (get-id s))))
@@ -338,7 +340,7 @@
   (let [as  (get-active-browser-sessions)
         sid (get as sname)]
     (if-not sid
-      (let [new-sid (init-session client-ip)
+      (let [new-sid (init-session client-ip sname)
             new-as  (assoc as sname new-sid)
             cval (json/generate-string new-as)]
         ;(println "new session map id (valid 30 days):" cval sname)
