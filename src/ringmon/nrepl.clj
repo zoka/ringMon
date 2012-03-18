@@ -243,7 +243,7 @@
       {:Client   client-host
        :SessName sname
        :SessId   (uuid-last id)
-       :IrcNick  nick
+       :ChatNick nick
        :LastCode lc
        :DataReq  (format "%7.3f sec ago" (/ (- now last-req-time) 1000.0))
        :CmdReq   (format "%7.3f sec ago" (/ (- now last-cmd-time) 1000.0))
@@ -277,7 +277,20 @@
 
 (defn welcome-msg
   [nick]
-  (str "Hi " nick". Welcome to nREPL."))
+  (str "Welcome to nREPL. Your chat nick is '" nick
+    "'.\nIt can be changed by this two line Clojure script:
+(require 'ringmon.api)
+(set-nick \"your-new-nick\") ; just paste it into nREPL input window,
+                           ; adjust the nick and press 'Submit' button.
+The 'SendMsg' button will send the contents of the nREPL input window
+(or just selection, if any) to all other people connected.
+More chat functions are avaliable in ringmon.api:
+get-nick[]              ; get your nick
+chat-nicks[]            ; get vector of all active nicks
+chat-send [msg & nicks] ; send message to all or some
+
+The input window below contains a sample Clojure script.
+If you want to get it out of the way, press Ctrl-Down while you have it in focus.")) 
 
 (defn init-session
   [client-ip sname]
@@ -302,7 +315,7 @@
     (when si
       (:nick si))))
 
-(defn irc-nicks
+(defn chat-nicks
   []
   (into [] (for [[sid si] @sessions] (:nick si))))
 
@@ -312,7 +325,7 @@
   (when (and my-si (not (string/blank? nick)))
     (locking my-si
       (let [old     (:nick my-si)
-            nicks   (into #{} (irc-nicks))]
+            nicks   (into #{} (chat-nicks))]
         (if-not (contains? nicks nick)
           (do
             (swap! sessions assoc sid (assoc my-si :nick nick))
@@ -339,7 +352,7 @@
   [s]
   (str s))
 
-(defn irc-send
+(defn chat-send
   [sid msg nicks]
   (when (and sid msg (not (string/blank? msg )))
     (let [my-nick  (session-get-nick sid)
@@ -455,17 +468,17 @@
           ;(when-not (empty? r) (println "bkg polled:" r))
           r)))))
 
-(defn get-irc-msg
+(defn get-chat-msg
   [sname client-ip]
   (let [sid (get-sess-id sname client-ip)]
     (when sid
       (let [m (session-fetch-msg sid)]
         m))))
 
-(defn put-irc-msg
+(defn put-chat-msg
   [msg sname client-ip]
   (when-let [sid (get-sess-id sname client-ip)]
-    (irc-send sid msg [])))
+    (chat-send sid msg [])))
 
 (defn break
   [sname client-ip]

@@ -110,7 +110,7 @@
         th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)
         sessions (repl/session-stats)
         repl (repl/do-cmd "" sname client-ip)
-        msg  (repl/get-irc-msg sname client-ip)]
+        msg  (repl/get-chat-msg sname client-ip)]
 
         {:Application
           {:CpuLoad          (format "%5.2f%%" @cpu-load)
@@ -121,17 +121,17 @@
           :Threading       th
           :ReplSessions    sessions
           :nREPL           repl
-          :ircMsg          msg
-          :config (extract-config)}))
+          :chatMsg         msg
+          :config          (extract-config)}))
 
 (defn do-jvm-gc
   []
   (jmx/invoke "java.lang:type=Memory" :gc)
   {:resp "ok"})
 
-(defn do-irc-send
+(defn do-chat-send
   [msg sname client-ip]
-  (repl/put-irc-msg msg sname client-ip)
+  (repl/put-chat-msg msg sname client-ip)
   {:resp "ok"})
 
 (defn decode-cmd
@@ -143,9 +143,9 @@
     (case cmd
       :get-mon-data (get-mon-data (:sess request) client-ip)
       :do-jvm-gc    (do-jvm-gc)
-      :do-repl      (repl/do-cmd (:code request) (:sess request) client-ip)
-      :repl-break   (repl/break  (:sess request) client-ip)
-      :irc-send     (do-irc-send (:msg request)  (:sess request) client-ip)
+      :do-repl      (repl/do-cmd  (:code request) (:sess request) client-ip)
+      :repl-break   (repl/break   (:sess request) client-ip)
+      :chat-send    (do-chat-send (:msg request)  (:sess request) client-ip)
       {:resp "bad-cmd"})))
 
 (defn ajax

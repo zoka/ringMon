@@ -213,7 +213,7 @@ function sendIrcMsg(e) {
   $("#sendmsg").attr("disabled", false);   // disable SendMsg button
   doAjaxCmd (
   {
-    cmd: "irc-send",
+    cmd: "chat-send",
     msg: b,
     sess: replSession
   });
@@ -339,9 +339,9 @@ var clojScript =
 + "\n" + "  (Thread/sleep 1000)"
 + "\n" + "  (if (< i 10)"
 + "\n" + "    (recur (inc i))"
-+ "\n" + "    i))      ; press Ctrl-Enter to submit for execution"
-+ "\n" + "             ; Once started, execution of this script can be "
-+ "\n" + '             ; stopped by "Interrupt" button';
++ "\n" + "    i))      ; Press Ctrl-Enter or 'Submit' button to execute."
++ "\n" + "             ; Once started, the execution of this script can be "
++ "\n" + "             ; stopped by 'Interrupt' button";
 
 function initEditor() {
   replOut = CodeMirror.fromTextArea(document.getElementById('ClojOut'),
@@ -550,7 +550,7 @@ function doAjaxCmd(request) {
       case "repl-break":
         respDoRepl("", jdata);
         break;
-      case "irc-send":
+      case "chat-send":
         $("#sendmsg").attr("disabled", false);
         clickGetMonData(); // refresh monitoring data
         break;
@@ -668,10 +668,10 @@ function makeTbl(s, jdata, ident) {
       validateConfig(val);
       continue;         // skip config
     }
-    if (name == "ircMsg") {
+    if (name == "chatMsg") {
       var val = jdata[name];
       handleIrcMsg(val);
-      continue;         // skip ircMsg
+      continue;         // skip chatMsg
     }
     var val = jdata[name];
     if (!isObject(val)) {

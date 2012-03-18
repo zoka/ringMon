@@ -18,14 +18,14 @@
   (let [sid (repl/current-sid)]
     (repl/session-get-nick sid)))
 
-(defn irc-nicks
+(defn chat-nicks
  "Get vector of all active nicks."
   []
-  (repl/irc-nicks))
+  (repl/chat-nicks))
 
-(defn irc-send
+(defn chat-send
  "Send IRC message to all or a group of IRC nicks."
   [msg & nicks]
   (let [sid   (repl/current-sid)
         nicks (into [] nicks)]
-    (repl/irc-send sid msg nicks)))
+    (repl/chat-send sid msg nicks)))
