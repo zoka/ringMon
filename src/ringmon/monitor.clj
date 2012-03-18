@@ -109,22 +109,29 @@
         ; and thread id values are not interesting anyway
         th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)
         sessions (repl/session-stats)
-        repl (repl/do-cmd "" sname client-ip)]
+        repl (repl/do-cmd "" sname client-ip)
+        msg  (repl/get-irc-msg sname client-ip)]
 
         {:Application
-          {:CpuLoad           (format "%5.2f%%" @cpu-load)
-           :AjaxReqsTotal     @ajax-reqs-tot
-           :AjaxReqsPerSec    (format "%7.2f" @ajax-reqs-ps)}
-          :OperatingSystem   os
-          :Memory            mem
-          :Threading         th
-          :Sessions          sessions
-          :nREPL repl
+          {:CpuLoad          (format "%5.2f%%" @cpu-load)
+           :AjaxReqsTotal    @ajax-reqs-tot
+           :AjaxReqsPerSec   (format "%7.2f" @ajax-reqs-ps)}
+          :OperatingSystem os
+          :Memory          mem
+          :Threading       th
+          :ReplSessions    sessions
+          :nREPL           repl
+          :ircMsg          msg
           :config (extract-config)}))
 
 (defn do-jvm-gc
   []
   (jmx/invoke "java.lang:type=Memory" :gc)
+  {:resp "ok"})
+
+(defn do-irc-send
+  [msg sname client-ip]
+  (repl/put-irc-msg msg sname client-ip)
   {:resp "ok"})
 
 (defn decode-cmd
@@ -138,6 +145,7 @@
       :do-jvm-gc    (do-jvm-gc)
       :do-repl      (repl/do-cmd (:code request) (:sess request) client-ip)
       :repl-break   (repl/break  (:sess request) client-ip)
+      :irc-send     (do-irc-send (:msg request)  (:sess request) client-ip)
       {:resp "bad-cmd"})))
 
 (defn ajax
@@ -177,7 +185,7 @@
         (if (ringmon-allowed? req)
           (if (= uri "/ringmon/command")
             (let [params (clojure.walk/keywordize-keys (:query-params req))
-                 client-ip (get-client-ip req)]
+                  client-ip (get-client-ip req)]
               (reset! last-request req) ; for debugging, is easy do read from REPL
               (response/response(ajax params client-ip)))
             (handler req))
@@ -202,3 +210,4 @@
   [cfg]
   (when (map? cfg)
     (swap! the-cfg merge cfg)))
+

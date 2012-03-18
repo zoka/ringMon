@@ -112,6 +112,7 @@ $(document).ready(function() {
   $("#dojvmgc").click(clickDoJvmGc);
   $("#irq").click(replBreak);
   $("#submit").click(clickReplSubmit);
+  $("#sendmsg").click(clickSendMsg);
 
   // initial refresh
   clickGetMonData();
@@ -185,6 +186,51 @@ function replBreak() {
   });
 }
 
+function sendIrcMsg(e) {
+  if (e != replIn)
+    return;
+  var b = e.getValue();
+  var s = e.getSelection();
+  b = rtrim(b);
+  s = rtrim(s);
+  if (b == "")
+    return;     // nothing to do
+
+  if (s == "") { // no selection
+    e.setValue("");
+    replHist [nextHistNdx++] = b;
+    ndxHist = nextHistNdx; // history pointer past freshest item
+    if (ndxHist > 1) {
+      if (replHist[ndxHist-1] == replHist[ndxHist-2]) {
+        // do not polute history with same buffer values
+        ndxHist--;
+        nextHistNdx--;
+      }
+    }
+  } else
+    b = s;  // send sellection only, no need to flush the current buffer
+
+  $("#sendmsg").attr("disabled", false);   // disable SendMsg button
+  doAjaxCmd (
+  {
+    cmd: "irc-send",
+    msg: b,
+    sess: replSession
+  });
+}
+
+function clickSendMsg() {
+  sendIrcMsg(replIn);
+}
+
+function handleIrcMsg(m) {
+  m = rtrim(m);
+  if (m == "")
+    return;
+  m += "\n";
+  appendBuffer(replOut, m);
+}
+
 function replSubmit(e) {
   if (e != replIn)
     return;
@@ -209,7 +255,7 @@ function replSubmit(e) {
   } else
     b = s;  // submit sellection only, no need to flush the current buffer
 
- $("#irq").attr("disabled", false);   // enable interrupt button
+  $("#irq").attr("disabled", false);   // enable interrupt button
   doAjaxCmd (
   {
     cmd: "do-repl",
@@ -503,6 +549,11 @@ function doAjaxCmd(request) {
         break;
       case "repl-break":
         respDoRepl("", jdata);
+        break;
+      case "irc-send":
+        $("#sendmsg").attr("disabled", false);
+        clickGetMonData(); // refresh monitoring data
+        break;
     }
   }
 
@@ -616,6 +667,11 @@ function makeTbl(s, jdata, ident) {
       var val = jdata[name];
       validateConfig(val);
       continue;         // skip config
+    }
+    if (name == "ircMsg") {
+      var val = jdata[name];
+      handleIrcMsg(val);
+      continue;         // skip ircMsg
     }
     var val = jdata[name];
     if (!isObject(val)) {

@@ -9,9 +9,9 @@
             [clj-json.core                 :as json]
             (clojure walk))
   (:import  (clojure.tools.nrepl.transport FnTransport)
-            (java.util.concurrent
-                LinkedBlockingQueue
-                TimeUnit)
+            (java.util.concurrent LinkedBlockingQueue TimeUnit)
+            (java.util Date)
+            (java.text SimpleDateFormat)
             (java.net InetAddress)))
 
 (defn set-to-vec
@@ -110,13 +110,6 @@
                handler   (server/default-handler)]
               (server/handle handler transport)))
     client-t))
-
-; transient session
-(defn handle-transient [req]
-  (with-open [conn (connect)]
-    (-> (repl/client conn 5000)
-      (repl/message req)
-      doall)))
 
 (defprotocol SessionOps
   (poll [this]
@@ -237,20 +230,23 @@
 (defrecord SessionInfo [sess
                         sname
                         client-host
+                        nick
                         last-code
                         last-req-time
                         last-cmd-time
-                        total-ops]
+                        total-ops
+                        msg]
   SessionStats
   (get-stats [this id]
     (let [now (System/currentTimeMillis)
           lc  (first-line last-code)]
       {:Client   client-host
-       :Name     sname
-       :Id       (uuid-last id)
+       :SessName sname
+       :SessId   (uuid-last id)
+       :IrcNick  nick
        :LastCode lc
-       :LastReq  (format "%7.3f sec ago" (/ (- now last-req-time) 1000.0))
-       :LastCmd  (format "%7.3f sec ago" (/ (- now last-cmd-time) 1000.0))
+       :DataReq  (format "%7.3f sec ago" (/ (- now last-req-time) 1000.0))
+       :CmdReq   (format "%7.3f sec ago" (/ (- now last-cmd-time) 1000.0))
        :TotalOps total-ops})))
 
 (def sessions (atom {}))  ;; active sessions map
@@ -263,7 +259,7 @@
 (defn session-stats
   []
   (let [svec (into []
-        (for [[sid ss] @sessions] (get-stats ss sid)))]
+        (for [[sid si] @sessions] (get-stats si sid)))]
      {:Count (get-sess-count)
       :Info svec}))
 
@@ -273,6 +269,16 @@
         r (not= s nil)]
     r))
 
+(def user-no (atom 0))
+(defn get-nick
+  []
+  (let [n (swap! user-no inc)]
+    (str "clojurian-" n)))
+
+(defn welcome-msg
+  [nick]
+  (str "Hi " nick". Welcome to nREPL."))
+
 (defn init-session
   [client-ip sname]
  "note: the low timeout value of 10 ms for session means
@@ -280,16 +286,100 @@
   long duration command such as '(Thread/sleep 1000)'"
   (let [s   (session-instance 10)]
     (when (and s (get-id s))
-      (let [now (System/currentTimeMillis)
-            ia  (InetAddress/getByName client-ip)
-            rh  (.getCanonicalHostName ia)
-            si  (SessionInfo. s sname rh " \n" now now 0)]
+      (let [now  (System/currentTimeMillis)
+            ia   (InetAddress/getByName client-ip)
+            rc   (.getCanonicalHostName ia)
+            nick (get-nick)
+            si   (SessionInfo. s sname rc nick
+                             " \n" now now 0 (welcome-msg nick))]
         (swap! sessions assoc (get-id s) si))
           ;(println "init-session:" (get-id s) "\n" @sessions)
           (get-id s))))
 
+(defn session-get-nick
+  [sid]
+  (let [si (get @sessions sid)]
+    (when si
+      (:nick si))))
+
+(defn irc-nicks
+  []
+  (into [] (for [[sid si] @sessions] (:nick si))))
+
+(defn session-set-nick
+ [sid nick]
+ (let [my-si (get @sessions sid)]
+  (when (and my-si (not (string/blank? nick)))
+    (locking my-si
+      (let [old     (:nick my-si)
+            nicks   (into #{} (irc-nicks))]
+        (if-not (contains? nicks nick)
+          (do
+            (swap! sessions assoc sid (assoc my-si :nick nick))
+            old)        ; return old nick
+          nil))))))     ; clash, return nothing
+
+(defn session-append-msg
+[sid msg]
+(let [s (:sess (get @sessions sid))]
+  (when s
+    (locking s
+      (let [si       (get @sessions sid)
+            old-msg  (:msg si)]
+        (if (= old-msg "")
+          (swap! sessions assoc sid (assoc si :msg msg))
+          (swap! sessions assoc sid (assoc si :msg (str old-msg "\n" msg)))))))))
+
+(def date-format (SimpleDateFormat. "HH:mm:ss"))
+(defn time-now
+  []
+  (.format date-format (Date.)))
+
+(defn set-to-str
+  [s]
+  (str s))
+
+(defn irc-send
+  [sid msg nicks]
+  (when (and sid msg (not (string/blank? msg )))
+    (let [my-nick  (session-get-nick sid)
+          nicks (disj (into #{} nicks) my-nick)] ; do not send message to self
+      (when my-nick
+        (if (empty? nicks)
+          (let [m (str (time-now) " "my-nick": " msg) ; send to all
+                k (keys @sessions)]
+            (dorun (map #(session-append-msg %1 m) k)))
+          (let [to-send (disj (into #{}
+                 (for [[sid si] @sessions]
+                   (when (contains? nicks (:nick si)) sid))) nil)
+                to-nicks (disj (into #{}
+                  (for [sd to-send] (session-get-nick sd))) nil)
+                to-list (set-to-str to-nicks)
+                m (str (time-now) " "my-nick"=>"to-list": " msg)]
+            (when-not (empty? to-send)
+              (session-append-msg sid m) ; message to self with recipents list
+              (loop [sids to-send]
+                (if (empty? sids)
+                  true
+                  (let [to-sid (first sids)
+                        nick   (session-get-nick to-sid)
+                        m      (str (time-now) " "my-nick"=>you: " msg)]
+                    (session-append-msg to-sid m)
+                    (recur (disj sids to-sid))))))))))))
+
+(defn session-fetch-msg
+  [sid]
+  (let [s (:sess (get @sessions sid))]
+    (when s
+      (locking s
+        (let [si   (get @sessions sid)
+              msg  (:msg  si)]
+          (swap! sessions assoc sid
+            (assoc si :msg ""))
+          msg)))))
+
 (defn session-put
-  [sid cmd client-ip]
+  [sid cmd]
   (let [s (:sess (get @sessions sid))]
     (when s
       (locking s
@@ -297,14 +387,13 @@
               tops (:total-ops si)]
           (swap! sessions assoc sid
             (assoc si
-              :client-ip     client-ip
               :last-code     (:code cmd)
               :last-cmd-time (System/currentTimeMillis)
               :total-ops     (inc tops)))))
       (put s cmd))))
 
 (defn session-poll
-  [sid client-ip]
+  [sid]
   (let [s (:sess (get @sessions sid))]
     (when s
       (locking s
@@ -312,7 +401,6 @@
               tops (:total-ops si)]
           (swap! sessions assoc sid
             (assoc si
-              :client-ip     client-ip
               :last-req-time (System/currentTimeMillis)
               :total-ops     (inc tops)))))
       (poll s))))
@@ -350,27 +438,39 @@
         new-sid)
       sid)))
 
+(defn current-sid
+ "Assumes only one session per browser. Improve later"
+  []
+  (second (first (get-active-browser-sessions))))
+
 (defn do-cmd
   [code sname client-ip]
   (let [sid (get-sess-id sname client-ip)]
-    (when-not (= sid "")
+    (when sid
       (if (not= code "")
-        (let [r (session-put sid {:op :eval :code code} client-ip)]
+        (let [r (session-put sid {:op :eval :code code})]
           ;(println "put response:"r)
           r)
-        (let [r (session-poll sid client-ip)]
+        (let [r (session-poll sid)]
           ;(when-not (empty? r) (println "bkg polled:" r))
           r)))))
 
-(defn do-transient-repl
-  [code]
-  (let [r  (handle-transient {:op :eval :code code})]
-    r))
+(defn get-irc-msg
+  [sname client-ip]
+  (let [sid (get-sess-id sname client-ip)]
+    (when sid
+      (let [m (session-fetch-msg sid)]
+        m))))
+
+(defn put-irc-msg
+  [msg sname client-ip]
+  (when-let [sid (get-sess-id sname client-ip)]
+    (irc-send sid msg [])))
 
 (defn break
   [sname client-ip]
   (let [sid (get-sess-id sname client-ip)]
-    (when-not (= sid "")
+    (when sid
       (let [s (:sess (get @sessions sid))]
         (when s
           (let [cid (get-pending s)]
