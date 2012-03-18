@@ -17,7 +17,7 @@
                         ; those local- prefixed values are set in ringmon.server
    :fast-poll  500      ; browser poll when there is REPL output activity
    :norm-poll  2000     ; normal browser poll time
-   :parent-uri ""       ; uri of the parrent application
+   :parent-url ""       ; complete url of the parent application main page
    :disabled   nil      ; general disable, if true then check :the auth-fn
    :auth-fn    nil}))   ; authorisation calback, checked only if :disabled is true
                         ; will be passed a Ring request, return true if Ok
@@ -100,7 +100,7 @@
 
 (defn extract-config
   []
-  (select-keys @the-cfg [:fast-poll :norm-poll :parent-uri]))
+  (select-keys @the-cfg [:fast-poll :norm-poll :parent-url]))
 
 (defn get-mon-data
   [sname client-ip]

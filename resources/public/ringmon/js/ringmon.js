@@ -152,7 +152,7 @@ function rtrim(stringToTrim) {
   return stringToTrim.replace(/\s+$/,"");
 }
 
-var parentUri = "none";
+var parentUrl = "none";
 
 function validateConfig(obj) {
   if (isObject(obj)) {
@@ -165,13 +165,13 @@ function validateConfig(obj) {
       normPoll = nPoll;
       fastPoll = fPoll;
 
-      var freshParentUri = obj["parent-uri"];
-      if (freshParentUri != parentUri) {
-        parentUri = freshParentUri;
+      var freshParentUrl = obj["parent-url"];
+      if (freshParentUrl != parentUrl) {
+        parentUrl = freshParentUrl;
         $('#parentlink').empty();
-        if (parentUri != "") {
+        if (parentUrl != "") {
           var html = 'Go back to the '+
-          '<a href="' + parentUri+'">the application</a>'+
+          '<a href="' + parentUrl+'">the application</a>'+
           ' that this page has been injected into.';
           $('#parentlink').append(html);
         }
@@ -237,12 +237,23 @@ function clickSendMsg() {
   sendIrcMsg(replIn);
 }
 
-function handleIrcMsg(m) {
+function handleChatMsg(m) {
   m = rtrim(m);
   if (m == "")
     return;
-  m += "\n";
-  appendBuffer(replOut, m);
+
+  var timeEnd  = m.indexOf(" ");
+  var timeStr  = m.substring(0, timeEnd);
+  var nBgn     = timeEnd+1;
+  var rest     = m.substring(nBgn);
+  var msgStart = nBgn+rest.indexOf(": ")+1;
+  var nickStr  = m.substring (nBgn, msgStart);
+  var msg      = m.substring(msgStart);
+
+  replPrinter.print("ns", timeStr);
+  replPrinter.print("bold", " " + nickStr);
+  replPrinter.print("code", msg);
+  replPrinter.flush();
 }
 
 function replSubmit(e) {
@@ -466,6 +477,9 @@ function createReplPrinter (editor) {
       case "code":
         buf = rtrim(buf);
         break;
+      case "bold":
+        cName = "cm-strong";
+        break;
     }
 
     bufferEnd(e);
@@ -477,7 +491,7 @@ function createReplPrinter (editor) {
       e.markText(from, to, cName);
     }
     // ommit trailing newline only for ns
-    if (theMode != "ns")
+    if (theMode != "ns" && theMode != "bold")
       appendBuffer(e,"\n");
     buf = "";
   }
@@ -684,7 +698,7 @@ function makeTbl(s, jdata, ident) {
     }
     if (name == "chatMsg") {
       var val = jdata[name];
-      handleIrcMsg(val);
+      handleChatMsg(val);
       continue;         // skip chatMsg
     }
     var val = jdata[name];

@@ -279,18 +279,18 @@
   [nick]
   (str "Welcome to nREPL. Your chat nick is '" nick
     "'.\nIt can be changed by this two line Clojure script:
-(require 'ringmon.api)
-(set-nick \"your-new-nick\") ; just paste it into nREPL input window,
-                           ; adjust the nick and press 'Submit' button.
+(use 'ringmon.api)
+(set-nick \"your-new-nick\") ; just paste it into nREPL input window below,
+                           ; adjust the nick and press the 'Submit' button.
 The 'SendMsg' button will send the contents of the nREPL input window
-(or just selection, if any) to all other people connected.
-More chat functions are avaliable in ringmon.api:
+(or just selection, if present) to all other active sessions.
+More chat functions are avaliable in ringmon.api namespace:
 get-nick[]              ; get your nick
 chat-nicks[]            ; get vector of all active nicks
 chat-send [msg & nicks] ; send message to all or some
 
 The input window below contains a sample Clojure script.
-If you want to get it out of the way, press Ctrl-Down while you have it in focus.")) 
+If you want to get it out of the way, press Ctrl-Down while you have it in focus."))
 
 (defn init-session
   [client-ip sname]
@@ -319,18 +319,26 @@ If you want to get it out of the way, press Ctrl-Down while you have it in focus
   []
   (into [] (for [[sid si] @sessions] (:nick si))))
 
+(defn ensure-no-inner-space-or-col
+  [s]
+  (let [s (string/trim s)
+        t (.replaceAll s " " "-")
+        r (.replaceAll t ":" "-")]
+     r))
+
 (defn session-set-nick
  [sid nick]
  (let [my-si (get @sessions sid)]
   (when (and my-si (not (string/blank? nick)))
-    (locking my-si
-      (let [old     (:nick my-si)
-            nicks   (into #{} (chat-nicks))]
-        (if-not (contains? nicks nick)
-          (do
-            (swap! sessions assoc sid (assoc my-si :nick nick))
-            old)        ; return old nick
-          nil))))))     ; clash, return nothing
+    (let [nick (ensure-no-inner-space-or-col nick)]
+      (locking my-si
+        (let [old     (:nick my-si)
+              nicks   (into #{} (chat-nicks))]
+          (if-not (contains? nicks nick)
+            (do
+              (swap! sessions assoc sid (assoc my-si :nick nick))
+              old)         ; return old nick if ok
+            nil)))))))     ; clash, return nothing
 
 (defn session-append-msg
 [sid msg]
@@ -350,7 +358,11 @@ If you want to get it out of the way, press Ctrl-Down while you have it in focus
 
 (defn set-to-str
   [s]
-  (str s))
+  (loop [r "" n s]
+    (if (empty? n)
+      (string/trim r)
+      (let [v (first n)]
+        (recur (str r " " v) (disj n v))))))
 
 (defn chat-send
   [sid msg nicks]
@@ -368,7 +380,7 @@ If you want to get it out of the way, press Ctrl-Down while you have it in focus
                 to-nicks (disj (into #{}
                   (for [sd to-send] (session-get-nick sd))) nil)
                 to-list (set-to-str to-nicks)
-                m (str (time-now) " "my-nick"=>"to-list": " msg)]
+                m (str (time-now) " "my-nick"=>("to-list"): " msg)]
             (when-not (empty? to-send)
               (session-append-msg sid m) ; message to self with recipents list
               (loop [sids to-send]
