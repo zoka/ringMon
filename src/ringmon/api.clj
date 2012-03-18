@@ -7,13 +7,13 @@
  to insure backwards compatibility"
 
 (defn set-nick
- "Change your IRC nick. Return the old one if succesful, nil otherwise."
+ "Change your chat nick. Return the old one if succesful, nil otherwise."
   [nick]
   (let [sid (repl/current-sid)]
     (repl/session-set-nick sid nick)))
 
 (defn get-nick
- "Get your session IRC nick"
+ "Get your session chat nick"
   []
   (let [sid (repl/current-sid)]
     (repl/session-get-nick sid)))
@@ -24,7 +24,11 @@
   (repl/chat-nicks))
 
 (defn chat-send
- "Send IRC message to all or a group of IRC nicks."
+ "Send chat message to everybody or to a list of nicks.
+  For example:
+  (chat-send \"Hello all \") ; send to all
+  ; send only to Alice and Bob
+  (chat-send \"Hello Alice and Bob \" \"Alice\" \"Bob\""
   [msg & nicks]
   (let [sid   (repl/current-sid)
         nicks (into [] nicks)]

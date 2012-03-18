@@ -152,6 +152,8 @@ function rtrim(stringToTrim) {
   return stringToTrim.replace(/\s+$/,"");
 }
 
+var parentUri = "none";
+
 function validateConfig(obj) {
   if (isObject(obj)) {
     var fPoll = obj["fast-poll"];
@@ -162,6 +164,18 @@ function validateConfig(obj) {
 
       normPoll = nPoll;
       fastPoll = fPoll;
+
+      var freshParentUri = obj["parent-uri"];
+      if (freshParentUri != parentUri) {
+        parentUri = freshParentUri;
+        $('#parentlink').empty();
+        if (parentUri != "") {
+          var html = 'Go back to the '+
+          '<a href="' + parentUri+'">the application</a>'+
+          ' that this page has been injected into.';
+          $('#parentlink').append(html);
+        }
+     }
   }
 }
 
