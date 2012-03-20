@@ -486,7 +486,7 @@ var clojScript =
 + "\n" + "  (Thread/sleep 1000)"
 + "\n" + "  (if (< i 10)"
 + "\n" + "    (recur (inc i))"
-+ "\n" + "    i))      ; Press Ctrl-Enter or 'Submit' button to execute."
++ "\n" + "    i))      ; Press Ctrl-Enter or 'Execute' button to execute."
 + "\n" + "             ; Once started, the execution of this script can be "
 + "\n" + "             ; stopped by 'Interrupt' button";
 
