@@ -1,4 +1,4 @@
-(defproject ringmon "0.1.0-SNAPSHOT"
+(defproject ringmon "0.1.1"
             :description "Ring handler to inject web page with nREPL front end"
             :dependencies [[org.clojure/clojure "1.3.0"]
                            [ring "1.0.1"]

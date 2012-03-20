@@ -7,15 +7,15 @@ derived values such as CPU load that is calculated by sampling JMX property Oper
 2 second and AJAX request statistics. It is also possible
 to force JVM garbage collection.
 
-Moreover, the page provides full featured 
-[nREPL](https://github.com/clojure/tools.nrepl) 
+Moreover, the page provides full featured
+[nREPL](https://github.com/clojure/tools.nrepl)
 front end with syntax colored editor, command history and persistent sessions.
 
 Note that for real life application such a page should be protected by admin access password, since it can
 be used to inflict some serious DOS damage to your server. Some sort of authentication
 interface is planned for later.
 
-You can see ringMon in action in this Noir application 
+You can see ringMon in action in this Noir application
 at [noirMon at Heroku](http://noirmon.herokuapp.com/).
 
 ## Usage (for local test)
@@ -24,11 +24,19 @@ at [noirMon at Heroku](http://noirmon.herokuapp.com/).
 lein deps
 lein run
 ```
-If you want to include ringMon in your leiningen project, simply add this to your dependencies:
+If you want to include ringMon in your leiningen project,
+simply add this to your dependencies:
 
 ```clojure
- [ringmon "0.1.0-SNAPSHOT"]
+ [ringmon "0.1.1"]
 ```
+
+To track the latest snapshot use:
+
+```clojure
+ [ringmon "0.1.2-SNAPSHOT"]
+```
+
 
 In case of bare Ring application such as this one, the following is needed:
 

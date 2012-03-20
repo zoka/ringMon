@@ -195,8 +195,8 @@ function validateConfig(obj) {
         parentUrl = freshParentUrl;
         $('#parentlink').empty();
         if (parentUrl != "") {
-          var html = 'Go back to the '+
-          '<a href="' + parentUrl+'">the application</a>'+
+          var html = 'Go to the '+
+          '<a href="' + parentUrl+'">original application</a>'+
           ' that this page has been injected into.';
           $('#parentlink').append(html);
         }
