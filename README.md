@@ -1,11 +1,16 @@
 # ringMon
 
 Ring middleware that injects single monitoring page into any Clojure web application
-based on Ring or web frameworks such as Noir or Compojure.
+based on Ring or web frameworks such as Noir or Compojure. It is
+also easily added as a dev dependency to non-web Clojure apps as well.
+Actually,it can be imcorporated into any JVM (non Clojure) application with
+bit more work - planned for later.
+
 The page displays raw JMX data of interest in tree alike structure. It also shows
 derived values such as CPU load that is calculated by sampling JMX property OperatingSystem.ProcessCpuTime every
 2 second and AJAX request statistics. It is also possible
 to force JVM garbage collection.
+
 
 Moreover, the page provides full featured
 [nREPL](https://github.com/clojure/tools.nrepl)
