@@ -91,8 +91,10 @@ var normPoll = 2000;
 var flagPeriodic = false;
 var lastAjaxRequestTime = 0;
 var nReplPending = false;
+var dataDisplay = true;
 
 var replSession="One";
+var replSessionId = "";
 var replPrinter;
 
 var replIn, replOut;
@@ -117,6 +119,16 @@ $(document).ready(function() {
   // initial refresh
   clickGetMonData();
 
+  // hide-data checkbox
+  $('#hide-data').on('change', function () {
+    if ($(this).is(':checked')) {
+      dataDisplay = false;
+      $(".tdata").empty();
+    }
+    else
+      dataDisplay = true;
+  });
+
  // periodic checkbox data refresh
   $('#periodic').on('change', function () {
     if ($(this).is(':checked')) {
@@ -130,11 +142,24 @@ $(document).ready(function() {
   });
 
   initEditor();
+  $("#hide-data").prop("checked", false);
   $("#periodic").prop("checked", false); // make sure that periodic is initially uncheked
                                          // if this is not done loading back from browser
                                          // history toggles it on/off
   $('#periodic').trigger('click');  // periodic data update on
   $("#irq").attr("disabled", true); // interrupt button disabled
+
+  $("#nick-confirm").prop("checked", true);
+  $("#mynick").attr("readonly",true);
+  $('#nick-confirm').on('change', function () {
+    if ($(this).is(':checked')) {
+      doChangeNick($("#mynick").val());
+      $("#mynick").attr("readonly",true);
+    } else {
+      $("#mynick").attr("readonly",false);
+      $("#mynick").focus();
+    }
+  });
 });
 
 
@@ -179,6 +204,88 @@ function validateConfig(obj) {
   }
 }
 
+function handleSid(newSid) {
+  if (newSid != replSessionId) {
+    // do some changeover stuff
+    annMonData = {}; // purge old stuff from display
+    replSessionId = newSid;
+  }
+}
+
+var myChatNick = "";
+var chatNicks = [];
+var sessCount = 0;
+
+function getVal (obj, name) {
+   if (name in obj)
+     return obj[name];
+   else
+     return null;
+}
+
+function compareStringArrays(a,b) {
+  if (a == null && b == null)
+    return true;
+  if (a == null || b == null)
+    return false;
+
+  if (a.length != b.length)
+      return false;
+
+  for (var i=0;i<a.length;i++) {
+    if (a[i] != b[i])
+      return false;
+  }
+  return true;
+}
+
+function nicksUpdate(nicks) {
+  $("#nicks").empty();
+  $("#nicks").append("<option>All people</option>");
+  for (var i in nicks) {
+    $("#nicks").append("<option>"+nicks[i]+"</option>");
+  }
+}
+
+function myNickUpdate(nick) {
+  $("#mynick").val(nick);
+}
+
+function handleSessionInfo (jdata) {
+  // this is data for all sessions including ours
+  // we can extract it by our session id
+  var obj;
+  var i=0;
+  var newNicks = [];
+  var myNewNick;
+  for (obj in jdata) {
+    var val = jdata[obj];
+    if (!isObject (val)) {
+      if (obj == "Count")
+        sessCount = val;
+      continue;
+    }
+
+    for (ndx in val) {
+      var f = val[ndx];
+      var sid  = getVal(f, "SessId");
+      var nick = getVal(f, "ChatNick");
+      if (sid == replSessionId)
+        myNewNick = nick;
+      else
+        newNicks[i++] = nick; // do not put our nick into array
+    }
+  }
+  newNicks = newNicks.sort();
+  if (!compareStringArrays (newNicks, chatNicks)) {
+    chatNicks = newNicks.slice(); // deep copy
+    nicksUpdate(chatNicks);
+  }
+  if (myNewNick != myChatNick) {
+    myChatNick = myNewNick;
+    myNickUpdate(myChatNick);
+  }
+}
 
 function replRefresh(){
   // same command, but empty code buffer
@@ -200,7 +307,7 @@ function replBreak() {
   });
 }
 
-function sendIrcMsg(e) {
+function sendChatMsg(e) {
   if (e != replIn)
     return;
   var b = e.getValue();
@@ -224,17 +331,32 @@ function sendIrcMsg(e) {
   } else
     b = s;  // send sellection only, no need to flush the current buffer
 
-  $("#sendmsg").attr("disabled", false);   // disable SendMsg button
+  var to = "";
+  var sel = $("#nicks").val();
+  if (sel != "All people")     // midddle space is important !
+    to = sel;
+
+  $("#sendmsg").attr("disabled", false);   // disable Send button
   doAjaxCmd (
   {
-    cmd: "chat-send",
+    cmd: "send-chat",
     msg: b,
+    to:  to,
     sess: replSession
   });
 }
 
 function clickSendMsg() {
-  sendIrcMsg(replIn);
+  sendChatMsg(replIn);
+}
+
+function doChangeNick(newNick) {
+  doAjaxCmd (
+  {
+    cmd: "set-chat-nick",
+    nick: newNick,
+    sess: replSession
+  });
 }
 
 function handleChatMsg(m) {
@@ -354,7 +476,7 @@ function clearHistory(e) {
   if (e != replIn)
     return;
   ndxHist = nextHistNdx = 0;
-  replIn.setValue("");
+  //replIn.setValue("");
 }
 
 var clojScript =
@@ -397,6 +519,7 @@ function initEditor() {
   CodeMirror.keyMap.default["Ctrl-Down"]  = histFwd;
   CodeMirror.keyMap.default["Ctrl-Home"]  = clearEditor;
   CodeMirror.keyMap.default["Ctrl-End"]   = clearHistory;
+
   replPrinter = createReplPrinter(replOut);
 }
 
@@ -550,6 +673,8 @@ function respDoRepl(code, jdata) {
       } else {
         $("#irq").attr("disabled", true);   // disable interrupt button
       }
+      if ("sid" in val)
+        handleSid(val["sid"]); // we may want to hadle session chageover
     }
   }
   if (s != "") {
@@ -701,6 +826,10 @@ function makeTbl(s, jdata, ident) {
       handleChatMsg(val);
       continue;         // skip chatMsg
     }
+    if (name == "ReplSessions") {
+      var val = jdata[name];
+      handleSessionInfo(val); // handle session information, but proceed as normal
+    }
     var val = jdata[name];
     if (!isObject(val)) {
       if (name != "__hidden")  // do not show hidden field, it is only for internal use
@@ -760,9 +889,12 @@ function annotateJson(fresh, ann) {
 function jsonToTable(jdata) {
   annotateJson(jdata, annMonData); // update annotated data
                                    // preserving hidden field markers, if any
-  $(".tdata").empty();
+
   var s= makeTbl("", annMonData, 0);
-  $(".tdata").append(s);
-  attachHideHandler("hide");
+  if (dataDisplay) {
+    $(".tdata").empty();
+    $(".tdata").append(s);
+    attachHideHandler("hide");
+  }
 }
 

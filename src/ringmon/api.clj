@@ -23,13 +23,13 @@
   []
   (repl/chat-nicks))
 
-(defn chat-send
+(defn send-chat
  "Send chat message to everybody or to a list of nicks.
   For example:
-  (chat-send \"Hello all \") ; send to all
+  (send-chat \"Hello all \") ; send to all
   ; send only to Alice and Bob
-  (chat-send \"Hello Alice and Bob \" \"Alice\" \"Bob\""
+  (send-chat \"Hello Alice and Bob \" \"Alice\" \"Bob\""
   [msg & nicks]
   (let [sid   (repl/current-sid)
         nicks (into [] nicks)]
-    (repl/chat-send sid msg nicks)))
+    (repl/send-chat sid msg nicks)))

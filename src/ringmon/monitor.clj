@@ -57,6 +57,7 @@
 
          (reset! ajax-reqs-ps
                  (/ (- ajax-reqs old-ajax-reqs) 2.0))
+         (repl/check-sessions) ; sessions house-keeping
          (recur (get-process-nanos)
                 (System/nanoTime)
                 @ajax-reqs-tot
@@ -120,8 +121,8 @@
           :OperatingSystem os
           :Memory          mem
           :Threading       th
+          :nREPL           repl      ; nREPL must be before since it carries sid
           :ReplSessions    sessions
-          :nREPL           repl
           :chatMsg         msg
           :config          (extract-config)}))
 
@@ -130,10 +131,15 @@
   (jmx/invoke "java.lang:type=Memory" :gc)
   {:resp "ok"})
 
-(defn do-chat-send
-  [msg sname client-ip]
-  (repl/put-chat-msg msg sname client-ip)
+(defn send-chat
+  [msg to sname client-ip]
+  (repl/send-chat-msg msg to sname client-ip)
   {:resp "ok"})
+
+(defn set-chat-nick
+  [nick sname client-ip]
+  (let [old-nick (repl/set-chat-nick nick sname client-ip)]
+    {:resp "ok" :old-nick old-nick}))
 
 (defn decode-cmd
   [request client-ip]
@@ -142,11 +148,12 @@
   (let [cmd (keyword (:cmd request))]
     (swap! ajax-reqs-tot inc)
     (case cmd
-      :get-mon-data (get-mon-data (:sess request) client-ip)
-      :do-jvm-gc    (do-jvm-gc)
-      :do-repl      (repl/do-cmd  (:code request) (:sess request) client-ip)
-      :repl-break   (repl/break   (:sess request) client-ip)
-      :chat-send    (do-chat-send (:msg request)  (:sess request) client-ip)
+      :get-mon-data  (get-mon-data  (:sess request) client-ip)
+      :do-jvm-gc     (do-jvm-gc)
+      :do-repl       (repl/do-cmd   (:code request) (:sess request) client-ip)
+      :repl-break    (repl/break    (:sess request) client-ip)
+      :send-chat     (send-chat     (:msg request)  (:to request) (:sess request) client-ip)
+      :set-chat-nick (set-chat-nick (:nick request) (:sess request) client-ip)
       {:resp "bad-cmd"})))
 
 (defn ajax
