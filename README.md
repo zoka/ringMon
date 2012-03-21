@@ -50,16 +50,16 @@ The reply travels all the way back in reverse order. The nREPL provides
  using bencode since the commands and responses are sent as
  native Clojure data structures.
 
- ## Demo
+## Demo
 
 You can see ringMon in action in
 [this](https://github.com/zoka/noirMon)
 showcase Noir application deployed
 at [Heroku](http://noirmon.herokuapp.com/).
 
-## Chat Facility
+## Chat facility
 
-ringMon monitoring page supports simple chat facility. This may be assist
+ringMon monitoring page supports a simple chat facility. This may be assist
 remote team members when they work together on the same deployed application
 instance. Or it can be just a fun tool to provide bit of social REPL-ing,
 such as [noirMon](http://noirmon.herokuapp.com/ringmon/monview.html) does.
