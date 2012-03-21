@@ -39,6 +39,13 @@ The reply travels all the way back in reverse order.
 You can see ringMon in action in this Noir application
 at [noirMon at Heroku](http://noirmon.herokuapp.com/).
 
+## Chat Facility
+
+rimgMon monitoring page supports simple chat facility. This may be assist
+remote team members when they work together on the same deplyed application
+insrance. Or it can be just as fun tool to provide bit of social REPL-ing s
+such as [noirMon](http://noirmon.herokuapp.com/) does.
+
 ## Usage (for local test)
 
 ```bash
