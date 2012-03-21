@@ -27,8 +27,6 @@
 (def ajax-reqs-ps  (atom 0.0))   ; ajax requests per second
 (def ajax-reqs-tot (atom 0))     ; total requests
 
-(def last-request (atom {}))
-
 (def ^:const sample-interval 2000) ; msec
 
 (defn get-process-nanos
@@ -194,17 +192,27 @@
           (if (= uri "/ringmon/command")
             (let [params (clojure.walk/keywordize-keys (:query-params req))
                   client-ip (get-client-ip req)]
-              (reset! last-request req) ; for debugging, is easy do read from REPL
               (response/response(ajax params client-ip)))
             (handler req))
           (response/response "Not allowed"))
-      (handler req)))))
+        (handler req)))))
+
+(defn wrap-pass-through
+  [handler]
+  (fn [req]
+    (let [uri (:uri req)]
+      (if (ringmon-req? uri)
+        (response/response
+          (str "ringMon already wrapped into separate web server at port "
+            (:local-port @the-cfg)))
+        (handler req)))))
 
 (defn wrap-ring-monitor
   [handler]
 
   (if (:local-repl @the-cfg)
-    handler  ;no need to wrap, it was already wrapped into local jetty server
+    (-> handler
+        (wrap-pass-through))
 
     (-> handler
         (res/wrap-resource "public")

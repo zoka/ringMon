@@ -328,9 +328,9 @@ get-nick[]              ; get your nick
 chat-nicks[]            ; get vector of all active nicks
 send-chat [msg & nicks] ; send message to all or some
 
-The input window may contain a sample Clojure snippet.
+The nREPL input window bellow may contain a sample Clojure snippet.
 To get it out of the way, press Ctrl-Down while you have it in focus.
-To recall it back from history use Ctrl-Up"))
+To recall it back from history use Ctrl-Up."))
 
 (defn init-session
   [client-ip sname]
