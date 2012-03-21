@@ -43,7 +43,7 @@ at [noirMon at Heroku](http://noirmon.herokuapp.com/).
 
 ringMon monitoring page supports simple chat facility. This may be assist
 remote team members when they work together on the same deplyed application
-insrance. Or it can be just as fun tool to provide bit of social REPL-ing s
+insrance. Or it can be just a fun tool to provide bit of social REPL-ing,
 such as [noirMon](http://noirmon.herokuapp.com/) does.
 
 ## Usage (for local test)
