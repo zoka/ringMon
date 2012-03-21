@@ -91,7 +91,7 @@ var normPoll = 2000;
 var flagPeriodic = false;
 var lastAjaxRequestTime = 0;
 var nReplPending = false;
-var dataDisplay = true;
+var dataDisplay = false;
 
 var replSession="One";
 var replSessionId = "";
@@ -123,7 +123,7 @@ $(document).ready(function() {
   $('#hide-data').on('change', function () {
     if ($(this).is(':checked')) {
       dataDisplay = false;
-      $(".tdata").empty();
+      $("#dataTree").empty();
     }
     else
       dataDisplay = true;
@@ -142,7 +142,7 @@ $(document).ready(function() {
   });
 
   initEditor();
-  $("#hide-data").prop("checked", false);
+  $("#hide-data").prop("checked", true);
   $("#periodic").prop("checked", false); // make sure that periodic is initially uncheked
                                          // if this is not done loading back from browser
                                          // history toggles it on/off
@@ -268,6 +268,8 @@ function handleSessionInfo (jdata) {
 
     for (ndx in val) {
       var f = val[ndx];
+      if (!isObject (f))
+        continue;
       var sid  = getVal(f, "SessId");
       var nick = getVal(f, "ChatNick");
       if (sid == replSessionId)
@@ -725,6 +727,48 @@ function isObject ( obj ) {
   return obj && (typeof obj  === "object");
 }
 
+function isArray(obj) {
+  return (typeString(obj) == "array");
+}
+
+function typeString(o) {
+  if (typeof o != 'object')
+    return typeof o;
+
+  if (o === null)
+      return "null";
+  //object, array, function, date, regexp, string, number, boolean, error
+  var internalClass = Object.prototype.toString.call(o)
+                                               .match(/\[object\s(\w+)\]/)[1];
+  return internalClass.toLowerCase();
+}
+
+
+function strAlign(s){
+  for (var i = 0; i < s.length; i++) {
+    var c = s[i];
+    if ((c >="0" && c <= "9") || c == "." || c == "%" || c == " ")
+      continue;
+    else
+      return "left";
+  }
+  return "right";
+}
+
+function getAlignment(v) {
+  var t = typeString(v);
+  switch (t) {
+    case "number":
+    case "boolean":
+      return "right";
+    case "string":
+      return strAlign(v);
+    default:
+      return "left";
+  }
+}
+
+
 // search json object jobj for the first instance of
 // object named objname and
 // then set its property named "__hidden" to val
@@ -745,7 +789,7 @@ function attachHideHandler (id) {
   $("[id="+id+"]").on("change", function(event) {
     var nameCell, name;
 
-    nameCell = event.target.parentElement.nextSibling.nextSibling;
+    nameCell = event.target.nextSibling;
     name = nameCell.textContent;
     name = name.slice(0, name.length - 1); // remove ":" at the end
     if ($(this).is(':checked'))
@@ -756,72 +800,103 @@ function attachHideHandler (id) {
   });
 }
 
-function makeRow(ident, name, val, hidden) {
-  var TreeStyles =
-  {
-    Hdr : {
-      light:  ' style="background:#F5F51D"',
-      dark:   ' style="background:#80800E"'},
-    Name : {
-      light:  ' style="background:#BAF7C3"',
-      dark:   ' style="background:#5DF7C3"'},
-    Val : {
-      light:  ' style="background:#B5F2F5"',
-      dark:   ' style="background:#B5F2F5"'}
-  };
+var TreeStyles =
+{
+  Hdr : {
+    light:  ' style="background:#F5F51D;"',
+    dark:   ' style="background:#80800E"'},
+  Name : {
+    light:  ' style="background:#BAF7C3; "',
+    dark:   ' style="background:#5DF7C3"'},
+  Val : {
+    light:  ' style="background:#B5F2F5"',
+    dark:   ' style="background:#B5F2F5"'}
+};
 
-  var s = "<tr>",
-  align ,
-  style ,
-  vstyle,
-  hChk = "",     // hide check box markup
-  chkState = "",
-  hdr = false,   // true for header row
-  hdrPad;       // markup for padding cell to align checkboxes properly
+var tableTag = '<table border=1 cellspacing=0 padding=0 style="margin-left:';
 
-  if (val === "")
-    hdr = true;
+function makeObjectHdr(ident, name, hidden) {
+  var s = tableTag + ident*15 +'"><tr>';
+  var chkState = "";
+  var align = ' align="left"';
+  var style = TreeStyles.Hdr.light;
 
-  if (hdr) {
-    align = ' align="left"';
-    style = TreeStyles.Hdr.light;
-    vstyle = style
-
-    if (!hidden)
+  if (!hidden)
       chkState  = 'checked="yes"';
-    hChk = '<input type="checkbox" id="hide"'+chkState+"></input>";
-  } else {
-    align = ' align="right"';
-    style =  TreeStyles.Name.light;
-    vstyle =  TreeStyles.Val.light;
-  }
+  var cell = '<input type="checkbox" id="hide"'+chkState+">"+name+"</input>";
 
-  if (hdr) {
-    hdrPad = "<td"+style+"></td>";
-  } else {
-    hdrPad  = "";
-  }
-
-  for (var i = 0; i < ident; i++) {
-      s += "<td></td>";
-  }
-  s += "<td>"+hChk+hdrPad+"</td><td"+align+style+">"+name+
-       ":</td><td align=right"+vstyle+">"+val+"</td></tr/>";
+  s += "<td"+align+style+">"+cell+":</td></tr></table>"
   return s;
 }
 
-function makeTbl(s, jdata, ident) {
+function makeObjectVal(name, val) {
+  var chkState = "";
+  var nalign = ' align="right"';
+  var nstyle = TreeStyles.Name.light;
+  var vstyle = TreeStyles.Val.light;
+  var valign = ' align="'+ getAlignment(val) + '";'
+
+  var s = "<tr><td" + nalign + nstyle + ">" + name + "</td>"
+            + "<td" + valign + vstyle + ">" + val  + "</td></tr>";
+  return s;
+}
+
+function makeTableHdr(element) {
+  var s = "";
+  var align = ' align="center"';
+  var style = TreeStyles.Name.light;
+  var vstyle = style;
+
+  for (var name in element)
+    s += "<td"+align+style+">" + name + "</td>";
+  return s;
+}
+
+function makeTableRow(element) {
+  var s = "<tr>";
+  var vstyle = TreeStyles.Val.light;
+
+  for (var name in element) {
+    var val = element[name];
+    var valign = ' align="' + getAlignment(val) + '";'
+    if (isObject(val))
+      val = "Object";     // do this later, just for fun
+    s += "<td" + valign + vstyle+">" + val + "</td>";
+  }
+  s += "</tr>";
+  return s;
+}
+
+function makeTable(arr, ident) {
+  var oldHdr = "";
+  var s = tableTag + ident*15 +'"><tr>';
+
+  for (ndx in arr) {
+    var hdr = makeTableHdr(arr[ndx]);
+    var row = makeTableRow(arr[ndx])
+    if (hdr != oldHdr)
+      s += hdr;
+    s += row;
+    oldHdr = hdr;
+  }
+  s += "</table>";
+  return s;
+}
+
+function makeTree(jdata, ident) {
+  var prevIsObj = true;
+  var s = "";
   for (var name in jdata) {
     if (name == "nREPL") {
       respDoRepl("", jdata[name]);
       continue;         // skip nREPL
     }
-    if (name == "config") {
+    if (name == "_config") {
       var val = jdata[name];
       validateConfig(val);
       continue;         // skip config
     }
-    if (name == "chatMsg") {
+    if (name == "_chatMsg") {
       var val = jdata[name];
       handleChatMsg(val);
       continue;         // skip chatMsg
@@ -832,17 +907,25 @@ function makeTbl(s, jdata, ident) {
     }
     var val = jdata[name];
     if (!isObject(val)) {
+      if (prevIsObj)
+        s += tableTag + ident*15+'">';
       if (name != "__hidden")  // do not show hidden field, it is only for internal use
-        s += makeRow(ident, name, val, false);
+        s += makeObjectVal(name, val);
     }  else {
       var hidden = false;
       if ("__hidden" in val)
         hidden = val["__hidden"];
-
-      s += makeRow(ident, name, "", hidden);
-      if (!hidden)
-        s += makeTbl("", val, ident+1);
+      if (!prevIsObj)
+        s += "</table>";
+      s += makeObjectHdr(ident, name, hidden);
+      if (!hidden) {
+        if (isArray (val))
+          s +=makeTable(val, ident+1);
+        else
+          s += makeTree(val, ident+1);
+      }
     }
+    prevIsObj = isObject(val);
   }
   return s;
 }
@@ -890,10 +973,10 @@ function jsonToTable(jdata) {
   annotateJson(jdata, annMonData); // update annotated data
                                    // preserving hidden field markers, if any
 
-  var s= makeTbl("", annMonData, 0);
+  var s= makeTree(annMonData, 1);
   if (dataDisplay) {
-    $(".tdata").empty();
-    $(".tdata").append(s);
+    $("#dataTree").empty();
+    $("#dataTree").append(s);
     attachHideHandler("hide");
   }
 }

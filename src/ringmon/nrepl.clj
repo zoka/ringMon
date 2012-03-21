@@ -265,8 +265,8 @@
        :SessId   sid
        :ChatNick nick
        :LastCode lc
-       :DataReq  (format "%7.3f sec ago" (/ (- now last-req-time) 1000.0))
-       :CmdReq   (format "%7.3f sec ago" (/ (- now last-cmd-time) 1000.0))
+       :DataReq  (format "%7.3f" (/ (- now last-req-time) 1000.0))
+       :CmdReq   (format "%7.3f" (/ (- now last-cmd-time) 1000.0))
        :TotalOps total-ops})))
 
 (def sessions (atom {}))  ;; active sessions map of sid to SessionInfo

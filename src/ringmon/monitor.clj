@@ -123,8 +123,8 @@
           :Threading       th
           :nREPL           repl      ; nREPL must be before since it carries sid
           :ReplSessions    sessions
-          :chatMsg         msg
-          :config          (extract-config)}))
+          :_chatMsg         msg
+          :_config          (extract-config)}))
 
 (defn do-jvm-gc
   []
