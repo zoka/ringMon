@@ -31,7 +31,7 @@ server traffic was to implement ringMOn as a Ring middleware.
 The communication path for request from browser to nREPL server is:
 
 ```
-browser(js)->AJAX->ringMon(clojure)->Custom-in-JVM-trasport->nREPLserver
+browser(js)->AJAX->ringMon(clj)->Custom-in-JVM-trasport(clj)->nREPLserver(clj)
 ```
 
 The reply travels all the way back in reverse order.
@@ -41,7 +41,7 @@ at [noirMon at Heroku](http://noirmon.herokuapp.com/).
 
 ## Chat Facility
 
-rimgMon monitoring page supports simple chat facility. This may be assist
+ringMon monitoring page supports simple chat facility. This may be assist
 remote team members when they work together on the same deplyed application
 insrance. Or it can be just as fun tool to provide bit of social REPL-ing s
 such as [noirMon](http://noirmon.herokuapp.com/) does.
