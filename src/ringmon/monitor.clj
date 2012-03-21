@@ -19,7 +19,7 @@
    :norm-poll  2000     ; normal browser poll time
    :parent-url ""       ; complete url of the parent application main page
    :disabled   nil      ; general disable, if true then check :the auth-fn
-   :auth-fn    nil}))   ; authorisation calback, checked only if :disabled is true
+   :auth-fn    nil}))   ; authorisation callback, checked only if :disabled is true
                         ; will be passed a Ring request, return true if Ok
 
 (def sampler-started    (atom false))
