@@ -1,7 +1,7 @@
 # ringMon
 
 Ring middleware that injects single monitoring page into any Clojure web application
-based on Ring or web frameworks such as Noir or Compojure. It is
+based on Ring or on higher level web frameworks such as Noir or Compojure. It is
 also easily added as a dev dependency to non-web Clojure apps as well.
 Actually, it can be incorporated into any JVM (non-Clojure) application with
 bit more work - planned for later.
@@ -11,14 +11,30 @@ derived values such as CPU load that is calculated by sampling JMX property Oper
 2 second and AJAX request statistics. It is also possible
 to force JVM garbage collection.
 
-
 Moreover, the page provides full featured
 [nREPL](https://github.com/clojure/tools.nrepl)
 front end with syntax colored editor, command history and persistent sessions.
 
-Note that for real life application such a page should be protected by admin access password, since it can
-be used to inflict some serious DOS damage to your server. Some sort of authentication
-interface is planned for later.
+Note that for real life application there sould be some
+mechanism to prevent unathorised access. There is a pluggable authenication
+function that will be called upon every AJAX command or ringMon page
+request. The function is passed the pending Ring request map, and then it can
+decide wether to pass the requets to be processed, or to reject it.
+Simple authentication mechanism woukd be to have white list of IP addresses
+allowed.
+
+ringMon can be very useful to provide nREPL access to cloud services
+such as Heroku. Heroku has restriction of one server socket per web app,
+so the convenient way to share nREPL communication with normal web
+server traffic was to implement ringMOn as a Ring middleware.
+
+The communication path for request from browser to nREPL server is:
+
+```
+browser(js)->AJAX->ringMon(clojure)->Custom-in-JVM-trasport->nREPLserver
+```
+
+The reply travels all the way back in reverse order.
 
 You can see ringMon in action in this Noir application
 at [noirMon at Heroku](http://noirmon.herokuapp.com/).
