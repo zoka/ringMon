@@ -26,7 +26,7 @@ allowed.
 ringMon can be very useful to provide nREPL access to cloud services
 such as Heroku. Heroku has restriction of one server socket per web app,
 so the convenient way to share nREPL communication with normal web
-server traffic was to implement ringMOn as a Ring middleware.
+server traffic was to implement ringMon as a Ring middleware.
 
 The communication path for request from browser to nREPL server is:
 
@@ -66,10 +66,10 @@ To track the latest snapshot use:
 ```
 
 
-In case of bare Ring application such as this one, the following is needed:
+In case of bare bones Ring application, the following is needed:
 
 ```clojure
-(ns ringmon.server
+(ns my.server
   (:require
       [ringmon.monitor          :as monitor]
       [ring.adapter.jetty       :as jetty]))
@@ -88,11 +88,10 @@ In case of bare Ring application such as this one, the following is needed:
       ; <-- add your additional middleware here
       (monitor/wrap-ring-monitor)))
 
-(defn -main [& m]
-  (let [mode (keyword (or (first m) :dev))
-        port (Integer. (get (System/getenv) "PORT" "8081"))]
+(defn -main []
+  (let [port (Integer. (get (System/getenv) "PORT" "8080"))]
 
-    (println "The ringMon local demo starting...")
+    (println "The ringMon bare bones local demo starting...")
     (jetty/run-jetty handler {:port port})))
 ```
 
