@@ -150,7 +150,7 @@ like it was done in [noirMon](http://noirmon.herokuapp.com/).
 
 Even if your Clojure applicarion is not web based, you can add
 ringMon to dev dependecies and use it as a replacement for
-buit in REPL.
+built in REPL.
 
 In this case ringMon runs first:
 
