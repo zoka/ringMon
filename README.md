@@ -172,7 +172,7 @@ You can start it entering this in nREPL input window:
 ```
 ### Run-time configuration
 
-The map below shows the default runtime configuration. It is typically
+The map bellow shows the default runtime configuration. It is typically
 adjusted before web server starts, but it may be changed later as well.
 
 ```clojure
