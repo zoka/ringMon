@@ -296,7 +296,7 @@
     (let [now (System/currentTimeMillis)]
       ; close the session if less than 5 requests in first 30 seconds
       (when (and (< (:total-ops si) 5)
-              (> (- now (:last-req-time si)) 10000))
+              (> (- now (:last-req-time si)) 30000))
         (let [sess (:sess si)]
           (println "Closing dead session, sid=" sid)
           (swap! sessions dissoc sid)
