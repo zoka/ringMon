@@ -45,7 +45,7 @@ browser(js)->AJAX->ringMon(clj)->Custom-intra-JVM-trasport(clj)->nREPLserver(clj
 The reply travels all the way back in reverse order. The nREPL provides
  pluggable transport architecture. This particular one is based on
  pair of
- [LnkedBlockingQueue](http://docs.oracle.com/javase/6/docs/api/java/util/concurrent/LinkedBlockingQueue.html)s
+ [LinkedBlockingQueue](http://docs.oracle.com/javase/6/docs/api/java/util/concurrent/LinkedBlockingQueue.html)s
  in back to back configuration - very fast and no need for
  using bencode since the commands and responses are sent as
  native Clojure data structures.
