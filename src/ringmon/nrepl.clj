@@ -270,39 +270,49 @@
        :TotalOps total-ops})))
 
 (def sessions (atom {}))  ;; active sessions map of sid to SessionInfo
+(def active-session-count (atom 0))
 
 (defn get-sess-count
   []
   (let [k (keys @sessions)]
     (count k)))
 
+(defn get-active-sess-count
+  []
+  @active-session-count)
+
 (defn session-stats
   []
   (let [svec (into []
         (for [[sid si] @sessions] (get-stats si sid)))]
-     {:Count (get-sess-count)
-      :Info svec}))
+     {:Total  (get-sess-count)
+      :Active @active-session-count
+      :Info   svec}))
 
 (defn check-session
+ "Returns one if octive so it can be counted, zero otherwise"
   [sid]
   (when-let [si   (get @sessions sid)]
     (let [sess (:sess si)
           now (System/currentTimeMillis)]
       ; close the session if less than 5 requests in first 30 seconds
-      (if (and (< (:total-ops si) 5)
+      (when (and (< (:total-ops si) 5)
                (> (- now (:last-req-time si)) 30000))
         (do
           (println "Closing dead session" sid)
           (swap! sessions dissoc sid)
-          (close sess))
-        nil))))
+          (close sess)))
+      (if (> (- now (:last-req-time si)) 10000) ; 10 seconds of inactivity
+        0                                       ; makes session inactive
+        1))))
 
 (defn check-sessions
   []
-  (let [sids (keys @sessions)]
-    (dorun (map check-session sids))))
+  (let [sids (keys @sessions)
+        acnt (reduce + (map check-session sids))]
+    (reset! active-session-count acnt)))
 
-(defn active-session?
+(defn valid-session?
   [sid]
   (let [s (get @sessions sid)
         r (not= s nil)]
@@ -488,7 +498,7 @@ To recall it back from history use Ctrl-Up."))
             (if (empty? m)
               r
               (let [[name sid] (first m)]
-                (if (active-session? sid)
+                (if (valid-session? sid)
                   (recur (assoc r name sid) (rest m))
                   (recur r (rest m)))))))))))
 

@@ -10,6 +10,8 @@
     [ringmon.cookies           :as cookies]
     [clojure.java.jmx          :as jmx]))
 
+(def tmancy "◔_◔")
+
 ; the middleware configuration
 (def the-cfg (atom
   {:local-repl nil      ; running on local machine on separate Jetty instance
