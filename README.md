@@ -59,7 +59,7 @@ at [Heroku](http://noirmon.herokuapp.com/).
 
 ## Chat facility
 
-ringMon monitoring page supports a simple chat facility. This may be assist
+ringMon monitoring page supports a simple chat facility. This may assist
 remote team members when they work together on the same deployed application
 instance. Or it can be just a fun tool to provide bit of social REPL-ing,
 such as [noirMon](http://noirmon.herokuapp.com/ringmon/monview.html) does.
