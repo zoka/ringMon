@@ -217,8 +217,8 @@
     (-> handler
         (res/wrap-resource "public")
         (finfo/wrap-file-info)
-        (wrap-gzip)                   ; gzip must be after wrap-resource!
         (wrap-ajax)
+        (wrap-gzip)                   ; gzip must be after wrap-resource!
         (cookies/wrap-noir-cookies)
         (param/wrap-params))))
 
