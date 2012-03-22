@@ -293,13 +293,12 @@
  "Returns one if octive so it can be counted, zero otherwise"
   [sid]
   (when-let [si   (get @sessions sid)]
-    (let [sess (:sess si)
-          now (System/currentTimeMillis)]
+    (let [now (System/currentTimeMillis)]
       ; close the session if less than 5 requests in first 30 seconds
       (when (and (< (:total-ops si) 5)
-               (> (- now (:last-req-time si)) 30000))
-        (do
-          (println "Closing dead session" sid)
+              (> (- now (:last-req-time si)) 10000))
+        (let [sess (:sess si)]
+          (println "Closing dead session, sid=" sid)
           (swap! sessions dissoc sid)
           (close sess)))
       (if (> (- now (:last-req-time si)) 10000) ; 10 seconds of inactivity
