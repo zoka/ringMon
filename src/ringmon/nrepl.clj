@@ -58,10 +58,18 @@
 (defn transport-pair
  "Returns vector of 2 direct transport instances,
   first one for client, and second one for server.
-  It is assumed that only pair of threads are waiting
-  on this transport pair - so in case of close operation
-  it is safe for the client or server thread to clear its
-  incoming queue without adverse impact."
+  This construct looks very mush like two ends od 
+  regular edtablished TCP socket connection, only
+  in this case it preserves message boundaries
+  and has little bit of messages patching in order
+  to mimic bencode behaviour.
+  It is assumed that only single thread will be waiting for
+  reception on each side of the transport pair, so in 
+  case of close operation it is safe for the client 
+  or server thread to clear its incoming queue without 
+  adverse impact. Close operation always makes sure that
+  other side is unstuck from blockig receive and notified
+  about close."
   []
   (let [client-q (LinkedBlockingQueue.)
        server-q  (LinkedBlockingQueue.)
@@ -110,8 +118,8 @@
 (defn connect
   "Connects to an REPL within the same procees using
    pair of LinkedBlockedQueue instances.
-   There is no server here, just a
-   furure that handles one to one connection.
+   There is no real server here, just a
+   future that handles one to one connection.
    Returns client transport instance."
   []
   (let [ [client-t server-t] (transport-pair) ]
@@ -430,20 +438,33 @@ To recall it back from history use Ctrl-Up."))
         r (.replaceAll t ":" "-")]
      r))
 
+(defn make-nick
+[nick nicks]
+(if-not (contains? nicks nick)
+  nick
+  (loop [try 1]
+    (let [nick (str nick "-" try)]
+      (if-not (contains? nicks nick)
+        nick
+        (recur (inc try)))))))
+
 (defn session-set-nick
  [sid nick]
  (let [my-si (get @sessions sid)]
   (when (and my-si (not (string/blank? nick)))
     (let [nick (ensure-no-inner-space-or-col nick)]
       (locking my-si
-        (let [old     (:nick my-si)
-              nicks   (into #{} (chat-nicks))]
-          (if-not (contains? nicks nick)
-            (do
+        (let [old   (:nick my-si)
+              nicks (into #{} (chat-nicks))]
+          (if (not= old nick)
+            (let [nick (make-nick nick nicks)]
               (swap! sessions assoc sid (assoc my-si :nick nick))
-              (send-chat sid (str "Changed the nick from '" old "' to '" nick"'.") [])
-              old)         ; return old nick if ok
-            nil)))))))     ; clash, return nothing
+              (send-chat
+                sid (str
+                  "Changed the nick from '" old
+                  "' to '" nick"'.") [])
+              old)
+            nil)))))))
 
 (defn session-fetch-msg
   [sid]

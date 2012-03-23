@@ -2,8 +2,11 @@
 *~
 pom.xml
 *jar
+/target/
+# old lein compatibility
 /lib/
+/docs/
 /classes/
 .lein-deps-sum
+.lein-failures
 .DS_Store
-
