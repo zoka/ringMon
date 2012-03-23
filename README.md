@@ -146,7 +146,7 @@ Again, the monitoring page is at `localhost:8080/ringmon/monview.html`.
 You might want to add more covenient link to this page in your appllication
 like it was done in [noirMon](http://noirmon.herokuapp.com/).
 
-### As a replacemnet for `lein repl`
+### As a replacement for `lein repl`
 
 Even if your Clojure applicarion is not web based, you can add
 ringMon to dev dependecies and use it as a replacement for

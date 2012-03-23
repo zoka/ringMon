@@ -58,18 +58,18 @@
 (defn transport-pair
  "Returns vector of 2 direct transport instances,
   first one for client, and second one for server.
-  This construct looks very mush like two ends od 
-  regular edtablished TCP socket connection, only
+  This construct looks very mush like two ends od
+  regular established TCP socket connection, only
   in this case it preserves message boundaries
-  and has little bit of messages patching in order
+  and has little bit of message patching in order
   to mimic bencode behaviour.
   It is assumed that only single thread will be waiting for
-  reception on each side of the transport pair, so in 
-  case of close operation it is safe for the client 
-  or server thread to clear its incoming queue without 
-  adverse impact. Close operation always makes sure that
-  other side is unstuck from blockig receive and notified
-  about close."
+  reception on each side of the transport pair, so in
+  case of close operation it is safe for the client
+  or server receoving thread to clear its incoming queue
+  without adverse impact. Close operation always makes sure that
+  the other side is unstuck from blocking receive and notified
+  the connection is closed."
   []
   (let [client-q (LinkedBlockingQueue.)
        server-q  (LinkedBlockingQueue.)
@@ -116,8 +116,8 @@
   [client-transport server-transport]))
 
 (defn connect
-  "Connects to an REPL within the same procees using
-   pair of LinkedBlockedQueue instances.
+  "Connects to nREPL server within the same procees using
+   the pair of LinkedBlockedQueue instances.
    There is no real server here, just a
    future that handles one to one connection.
    Returns client transport instance."
@@ -178,7 +178,7 @@
             nil)
           (do
             ;(println "Retrying new-session," c "tries to go.")
-            (Thread/sleep 10)
+            (Thread/sleep 50)     ; try yo wait longer, was 10
             (recur (dec c))))))))
 
 (defn session-instance
