@@ -80,6 +80,7 @@ simply add this to your dependencies:
 ```clojure
  [ringmon "0.1.2"]
 ```
+ringMon `project.clj` is compatible with Leiningen v2.0  as well.
 
 To track the latest snapshot (recommended) use:
 
