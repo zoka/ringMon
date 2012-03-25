@@ -79,7 +79,7 @@
   or configuration map with amended values.
   Returns true if succesful."
   [& cfg]
-  (println "Starting with configuration:" cfg)
+  (println "[ringMon server] starting with:" cfg)
   (let [cfg (first cfg)] ; only one optional map expected
     (when (or (nil? cfg) (map? cfg))
       (swap! loc-cfg merge cfg)
