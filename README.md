@@ -70,7 +70,7 @@ such as [noirMon](http://noirmon.herokuapp.com/ringmon/monview.html) does.
 lein deps
 lein run
 ```
-Point your browser to `localhost:8081`.
+Point your browser to `localhost:8888`.
 
 ## Using ringMon in your applications
 
@@ -78,13 +78,13 @@ If you want to include ringMon in your leiningen project,
 simply add this to your dependencies:
 
 ```clojure
- [ringmon "0.1.1"]
+ [ringmon "0.1.2"]
 ```
 
 To track the latest snapshot (recommended) use:
 
 ```clojure
- [ringmon "0.1.2-SNAPSHOT"]
+ [ringmon "0.1.3-SNAPSHOT"]
 ```
 ### Bare bones
 
@@ -140,7 +140,7 @@ modify startup in your server.clj:
     (server/add-middleware monitor/wrap-ring-monitor)
 
     (server/start port {:mode mode
-                        :ns 'noirmon})))
+                        :ns 'myapp})))
 ```
 Again, the monitoring page is at `localhost:8080/ringmon/monview.html`.
 You might want to add more covenient link to this page in your appllication
@@ -149,27 +149,31 @@ like it was done in [noirMon](http://noirmon.herokuapp.com/).
 ### As a replacement for `lein repl`
 
 Even if your Clojure application is not web based, you can add
-ringMon to dev dependecies and use it as a replacement for
+`[ringmon "0.1.2"]`
+and
+`[ring/ring-jetty-adapter "1.0.1"]`
+to dev dependencies and use it as a replacement for
 built in REPL.
 
 In this case ringMon runs first:
 
 ```clojure
-lein run -m ringmon.server "{:local-repl true :local-port 0}"
+lein run -m ringmon.server "{:local-repl true :port 0}"
 ```
 This will start a separate Jetty instance on autoselected server
 port just to serve the nREPL page. Your default browser will automatically
-start and load the monitoring page. If `:local-port` has
+start and load the monitoring page. If `:port` has
 non-zero value then there will be no port autoselection. Default
-value is `8081`.
+value is `8888`.
 
-You can run above command on a remote a headless server
+You can run above command on a remote headless server
 as well - the browser start attempt should fail gracefuly. In this case
 you will want to specify a port that is visible to browser on your desktop.
-Note that now the :local-port` is actually the remote one.
+Automatic browser activation is disabled by omitting `local-repl` key or
+ny setting it to false or nil.
 
 At this point your application is not runnning yet.
-You can start it entering this in nREPL input window:
+You can start it by entering this in nREPL input window:
 
 ```clojure
 (use 'your.app.main.namespace)
@@ -182,6 +186,7 @@ adjusted before web server starts, but it may be changed later as well.
 
 ```clojure
 ; the middleware configuration
+ the middleware configuration
 (def the-cfg (atom
   {
    :local-repl   nil    ; set to true if browser is to autostart assuming
@@ -199,6 +204,7 @@ adjusted before web server starts, but it may be changed later as well.
    :fast-poll  500      ; browser poll when there is a REPL output activity
    :norm-poll  2000     ; normal browser poll time
    :parent-url ""       ; complete url of the parent application main page (optional)
+   :lein-webrepl nil  ; set if runing in standalone mode in context of lein-webrepl plugin
    ;-----------------------------------------------------------------------
    ; access control
    :disabled   nil      ; general disable, if true then check :the auth-fn
