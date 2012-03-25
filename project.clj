@@ -1,5 +1,6 @@
 (defproject ringmon "0.1.3-SNAPSHOT"
   :description  "Ring middleware to inject web page with nREPL front end"
+  :url "https://github.com/zoka/ringMon"
   :dependencies [[org.clojure/clojure "1.3.0"]
                 [ring/ring-core "1.0.1"]
                 [org.clojure/java.jmx "0.1"]
