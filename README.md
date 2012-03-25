@@ -148,7 +148,7 @@ like it was done in [noirMon](http://noirmon.herokuapp.com/).
 
 ### As a replacement for `lein repl`
 
-Even if your Clojure applicarion is not web based, you can add
+Even if your Clojure application is not web based, you can add
 ringMon to dev dependecies and use it as a replacement for
 built in REPL.
 
@@ -161,7 +161,12 @@ This will start a separate Jetty instance on autoselected server
 port just to serve the nREPL page. Your default browser will automatically
 start and load the monitoring page. If `:local-port` has
 non-zero value then there will be no port autoselection. Default
-value is `8081`
+value is `8081`.
+
+You can run above command on a remote a headless server
+as well - the browser start attempt should fail gracefuly. In this case
+you will want to specify a port that is visible to browser on your desktop.
+Note that now the :local-port` is actually the remote one.
 
 At this point your application is not runnning yet.
 You can start it entering this in nREPL input window:
@@ -178,17 +183,30 @@ adjusted before web server starts, but it may be changed later as well.
 ```clojure
 ; the middleware configuration
 (def the-cfg (atom
-  {:local-repl nil      ; running on local machine on separate Jetty instance
-   :local-port nil      ; on this port (if set to zero, will be auto selected)
-                        ; those local- prefixed values are set in ringmon.server
-   :fast-poll  500      ; browser poll when there is REPL output activity
+  {
+   :local-repl   nil    ; set to true if browser is to autostart assuming
+                        ; running locally (optional).
+   :http-server  nil    ; Ring compatible http server start function that
+                        ; needs ring-handler and {:port port} as parameters
+                        ; If it is not set, the Jetty one will be attempted
+                        ; to be resolved dynamically
+   :ring-handler nil    ; Ring compatible handler
+   :port         nil    ; http-server port
+   ; If ringmon runs on its own webserver then last 2 options must be set
+   ; prior to calling ringmon.server/start
+   ;---------------------------------------------------------------------
+   ; Browser parameters
+   :fast-poll  500      ; browser poll when there is a REPL output activity
    :norm-poll  2000     ; normal browser poll time
-   :parent-url ""       ; complete url of the parent application main page
+   :parent-url ""       ; complete url of the parent application main page (optional)
+   ;-----------------------------------------------------------------------
+   ; access control
    :disabled   nil      ; general disable, if true then check :the auth-fn
    :auth-fn    nil}))   ; authorisation callback, checked only if :disabled is true
                         ; will be passed a Ring request, return true if Ok
+
 ```
-Use this function `ringmon.monitor/merge-cfg` to change the configuration
+Use `ringmon.monitor/merge-cfg` to change the configuration
 safely.
 
 ```clojure

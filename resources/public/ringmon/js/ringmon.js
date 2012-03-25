@@ -489,8 +489,11 @@ var clojScript =
 + "\n" + "  (if (< i 10)"
 + "\n" + "    (recur (inc i))"
 + "\n" + "    i))      ; Press Ctrl-Enter or 'Execute' button to execute."
-+ "\n" + "             ; Once started, the execution of this script can be "
-+ "\n" + "             ; stopped by 'Interrupt' button";
++ "\n" + "             ; Once started, the execution of this Clojure snippet"
++ "\n" + "             ; can be stopped by 'Interrupt' button.\n"
++ "\n" + "             ; Press Ctrl-Down while having 'nREPL Input' window"
++ "\n" + "             ; in focus to get this snippet out of the way."
++ "\n" + "             ; Press Ctrl-Up to recall it back from the history.";
 
 function initEditor() {
   replOut = CodeMirror.fromTextArea(document.getElementById('ClojOut'),

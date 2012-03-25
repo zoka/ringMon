@@ -14,12 +14,25 @@
 
 ; the middleware configuration
 (def the-cfg (atom
-  {:local-repl nil      ; running on local machine on separate Jetty instance
-   :local-port nil      ; on this port (if set to zero, will be auto selected)
-                        ; those local- prefixed values are set in ringmon.server
-   :fast-poll  500      ; browser poll when there is REPL output activity
+  {
+   :local-repl   nil    ; set to true if browser is to autostart assuming
+                        ; running locally (optional).
+   :http-server  nil    ; Ring compatible http server start function that
+                        ; needs ring-handler and {:port port} as parameters
+                        ; If it is not set, the Jetty one will be attempted
+                        ; to be resolved dynamically
+   :ring-handler nil    ; Ring compatible handler
+   :port         nil    ; http-server port
+   ; If ringmon runs on its own webserver then last 2 options must be set
+   ; prior to calling ringmon.server/start
+   ;---------------------------------------------------------------------
+   ; Browser parameters
+   :fast-poll  500      ; browser poll when there is a REPL output activity
    :norm-poll  2000     ; normal browser poll time
-   :parent-url ""       ; complete url of the parent application main page
+   :parent-url ""       ; complete url of the parent application main page (optional)
+   :lein-webrepl nil  ; set if runing in standalone mode in context of lein-webrepl plugin
+   ;-----------------------------------------------------------------------
+   ; access control
    :disabled   nil      ; general disable, if true then check :the auth-fn
    :auth-fn    nil}))   ; authorisation callback, checked only if :disabled is true
                         ; will be passed a Ring request, return true if Ok
@@ -28,7 +41,6 @@
 (def cpu-load      (atom 0.0))
 (def ajax-reqs-ps  (atom 0.0))   ; ajax requests per second
 (def ajax-reqs-tot (atom 0))     ; total requests
-
 (def ^:const sample-interval 2000) ; msec
 
 (defn get-process-nanos
@@ -101,7 +113,10 @@
 
 (defn extract-config
   []
-  (select-keys @the-cfg [:fast-poll :norm-poll :parent-url]))
+  (select-keys @the-cfg [:fast-poll
+                         :norm-poll
+                         :parent-url
+                         :lein-webrepl]))
 
 (defn get-mon-data
   [sname client-ip]
@@ -141,10 +156,15 @@
   (let [old-nick (repl/set-chat-nick nick sname client-ip)]
     {:resp "ok" :old-nick old-nick}))
 
+(defn init-module
+  []
+  (.start (Thread. data-sampler))
+  (repl/set-mirror-cfg @the-cfg))
+
 (defn decode-cmd
   [request client-ip]
   (when-not @sampler-started
-    (.start (Thread. data-sampler)))
+    (init-module))
   (let [cmd (keyword (:cmd request))]
     (swap! ajax-reqs-tot inc)
     (case cmd
@@ -206,7 +226,7 @@
       (if (ringmon-req? uri)
         (response/response
           (str "ringMon already wrapped into separate web server at port "
-            (:local-port @the-cfg)))
+            (:port @the-cfg)))
         (handler req)))))
 
 (defn wrap-ring-monitor

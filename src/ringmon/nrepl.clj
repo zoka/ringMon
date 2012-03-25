@@ -6,7 +6,7 @@
             [clojure.string                :as string]
             [ringmon.cookies               :as cookies]
             [clojure.tools.nrepl.misc      :as repl.misc]
-            [clj-json.core                 :as json]
+            [clj-json.core             :as json]
             (clojure walk))
   (:import  (clojure.tools.nrepl.transport FnTransport)
             (java.util.concurrent LinkedBlockingQueue TimeUnit)
@@ -66,7 +66,7 @@
   It is assumed that only single thread will be waiting for
   reception on each side of the transport pair, so in
   case of close operation it is safe for the client
-  or server receoving thread to clear its incoming queue
+  or server receiving thread to clear its incoming queue
   without adverse impact. Close operation always makes sure that
   the other side is unstuck from blocking receive and notified
   the connection is closed."
@@ -331,8 +331,16 @@
   (let [n (swap! user-no inc)]
     (str "clojurian-" n)))
 
+(def mirror-cfg (atom {}))
+
+(defn set-mirror-cfg
+  [cfg]
+  (reset! mirror-cfg cfg))
+
 (defn welcome-msg
-  [nick]
+  [nick sid]
+  ;(println "the-cfg" @ringmon.monitor/the-cfg)
+  (if-not (:lein-webrepl @mirror-cfg)
   (str "Welcome to nREPL. Your chat nick is '" nick
     "'.\nTo change it, uncheck 'Confirm', modify 'Chat as' and check 'Confirm' again.
 Just for fun, same can be done with this two liner:
@@ -343,11 +351,8 @@ Just for fun, same can be done with this two liner:
 More chat functions are avaliable in ringmon.api namespace:
 get-nick[]              ; get your nick
 chat-nicks[]            ; get vector of all active nicks
-send-chat [msg & nicks] ; send message to all or some
-
-The nREPL input window bellow may contain a sample Clojure snippet.
-To get it out of the way, press Ctrl-Down while you have it in focus.
-To recall it back from history use Ctrl-Up."))
+send-chat [msg & nicks] ; send message to all or some")
+  (str "Welcome to lein-webrepl plugin. Your session id is " sid ".")))
 
 (defn init-session
   [client-ip sname]
@@ -356,15 +361,15 @@ To recall it back from history use Ctrl-Up."))
   long duration command such as '(Thread/sleep 1000)'"
   (let [s   (session-instance 10)]
     (when (and s (get-id s))
-      (let [now  (System/currentTimeMillis)
+      (let [sid  (get-id s)
+            now  (System/currentTimeMillis)
             ia   (InetAddress/getByName client-ip)
             rc   (.getCanonicalHostName ia)
             nick (get-nick)
             si   (SessionInfo. s sname rc nick
-                             " \n" now now 0 (welcome-msg nick))]
-        (swap! sessions assoc (get-id s) si))
-          ;(println "init-session:" (get-id s) "\n" @sessions)
-          (get-id s))))
+                             " \n" now now 0 (welcome-msg nick sid))]
+        (swap! sessions assoc sid si)
+        sid))))
 
 (defn session-get-nick
   [sid]
