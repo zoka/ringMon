@@ -170,8 +170,8 @@ value is `8888`.
 You can run above command on a remote headless server
 as well - the browser start attempt should fail gracefuly. In this case
 you will want to specify a port that is visible to browser on your desktop.
-Automatic browser activation is disabled by omitting `local-repl` key or
-ny setting it to false or nil.
+Automatic browser activation is disabled by omitting `:local-repl` key or
+by setting it to false or nil.
 
 At this point your application is not runnning yet.
 You can start it by entering this in nREPL input window:
@@ -187,7 +187,6 @@ adjusted before web server starts, but it may be changed later as well.
 
 ```clojure
 ; the middleware configuration
- the middleware configuration
 (def the-cfg (atom
   {
    :local-repl   nil    ; set to true if browser is to autostart assuming
