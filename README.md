@@ -182,7 +182,7 @@ You can start it by entering this in nREPL input window:
 ```
 There is an easier way to add web based nREPL capability to your
 project if you have Leiningen v 2.0 installed, by
-installing lein-webrepl plugin and simply entering:
+installing `lein-webrepl` plugin and simply entering:
 
 ```bash
 lein2 webrepl
