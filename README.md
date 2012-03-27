@@ -181,7 +181,7 @@ You can start it by entering this in nREPL input window:
 (-main)
 ```
 There is an easier way to add web based nREPL capability to your
-project if you have Leiningen v 2.0 installed, by using
+project if you have Leiningen v 2.0 installed, by
 installing lein-webrepl plugin and simply entering:
 
 ```bash
@@ -190,7 +190,7 @@ lein2 webrepl
 in your project folder. No changes are required  to
 'project.clj`. Note that lein 1.x and 2.0 can be installed side by side.
 See
-[lwin-webrepl GitHub page](https://github.com/zoka/lein-webrepl)
+[lein-webrepl GitHub page](https://github.com/zoka/lein-webrepl)
 for more info.
 
 ## Run-time configuration

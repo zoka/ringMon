@@ -5,10 +5,10 @@
 ;  Cherry picked from Cheshire.
 
 (ns ringmon.json
- (:import 
-   (org.codehaus.jackson 
-    JsonParser 
-    JsonFactory 
+ (:import
+   (org.codehaus.jackson
+    JsonParser
+    JsonFactory
     JsonToken
     JsonGenerator
     JsonParser$Feature
