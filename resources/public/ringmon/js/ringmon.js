@@ -883,7 +883,7 @@ function makeTable(arr, ident) {
     if (isArray (arr[ndx])) {
       var x = arr[ndx];
       s += makeTableRow(x);
-      prevDScalar = false;
+      prevScalar = false;
       prevHdr = "";
       continue;
     }
@@ -893,7 +893,7 @@ function makeTable(arr, ident) {
       if (hdr != prevHdr)
         s += hdr;
       s += row;
-      prev = hdr;
+      prevHdr = hdr;
       prevScalar = false;
     } else {
       if (!prevScalar)
