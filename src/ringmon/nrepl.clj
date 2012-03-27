@@ -6,11 +6,12 @@
             [clojure.string                :as string]
             [ringmon.cookies               :as cookies]
             [clojure.tools.nrepl.misc      :as repl.misc]
-            [clj-json.core             :as json]
+            [ringmon.json                  :as json]
             (clojure walk))
   (:import  (clojure.tools.nrepl.transport FnTransport)
             (java.util.concurrent LinkedBlockingQueue TimeUnit)
             (java.util Date)
+            (java.io StringWriter)
             (java.text SimpleDateFormat)
             (java.net InetAddress)))
 
@@ -217,19 +218,19 @@
         (do-resp (client)))
       (fn put [cmd]
         (let [cid (repl.misc/uuid)]
-              ; attach command and session ids to original command
-              ; before submitting it to nREPL server
-              (client-msg (assoc cmd :session sid :id cid))
-              (when-not (= (:op cmd) :interrupt)
-                (swap! cmd-q conj [cid cmd])); put in the Q if it is not interrupt command
-              ;(println "submitted:" (assoc cmd :session sid :id cid))
-              (let [r (client)]
-                (if (empty? r)
-                  [:pend true :cid cid] ; if no immediate response in 10 ms,
-                                         ; just return command id and pending indication
-                  (do-resp r)            ; else return nREPL response,
-                                         ; containing command id anyway
-                ))))
+          ; attach command and session ids to original command
+          ; before submitting it to nREPL server
+          (client-msg (assoc cmd :session sid :id cid))
+          (when-not (= (:op cmd) :interrupt)
+            (swap! cmd-q conj [cid cmd])); put in the Q if it is not interrupt command
+          ;(println "submitted:" (assoc cmd :session sid :id cid))
+          (let [r (client)]
+            (if (empty? r)
+              [:pend true :cid cid] ; if no immediate response in 10 ms,
+                                     ; just return command id and pending indication
+              (do-resp r)            ; else return nREPL response,
+                                     ; containing command id anyway
+            ))))
       (fn get-id []
         sid)
       (fn get-pending []
@@ -331,7 +332,36 @@
   (let [n (swap! user-no inc)]
     (str "clojurian-" n)))
 
+
 (def mirror-cfg (atom {}))
+(def lein-project (atom {}))
+
+; taken from marginalia.core
+(defn- parse-project-form
+  [[_ project-name version-number & attributes]]
+  (merge {:name (str project-name)
+      :version version-number}
+     (apply hash-map attributes)))
+
+(defn- parse-project-file
+  ([] (parse-project-file "./project.clj"))
+  ([path]
+    (try
+      (let [rdr (clojure.lang.LineNumberingPushbackReader.
+                  (java.io.FileReader.
+                    (java.io.File. path)))]
+        (parse-project-form (read rdr)))
+      (catch Exception e)))) ; fail silently and return nil
+
+(defn parse-lein-project    ; called from monitor only once on init
+  []
+  (let [p (parse-project-file)]
+    (when p
+      (reset! lein-project (merge p (:lein-webrepl @mirror-cfg))))))
+
+(defn get-lein-project
+  []
+  @lein-project)
 
 (defn set-mirror-cfg
   [cfg]
@@ -339,7 +369,6 @@
 
 (defn welcome-msg
   [nick sid]
-  ;(println "the-cfg" @ringmon.monitor/the-cfg)
   (if-not (:lein-webrepl @mirror-cfg)
   (str "Welcome to nREPL. Your chat nick is '" nick
     "'.\nTo change it, uncheck 'Confirm', modify 'Chat as' and check 'Confirm' again.
@@ -353,6 +382,26 @@ get-nick[]              ; get your nick
 chat-nicks[]            ; get vector of all active nicks
 send-chat [msg & nicks] ; send message to all or some")
   (str "Welcome to lein-webrepl plugin. Your session id is " sid ".")))
+
+(defn session-setup
+  [sess]
+  (let [repl-init-ns (:repl-init @lein-project)
+        main-ns      (:main      @lein-project)
+        sw           (StringWriter.)]
+    (when repl-init-ns
+      (.write sw (str "(require '"repl-init-ns")\n")))
+    (when main-ns
+      (.write sw (str "(require '"main-ns")\n")))
+    (if repl-init-ns
+       (.write sw (str "(in-ns '"repl-init-ns")\n"))
+       (when main-ns
+         (.write sw (str "(in-ns '"main-ns")\n"))))
+    (let [fbody (.toString sw)]
+      (when (not= fbody "")
+        (let [code (str "(defn repl-setup\n[]\n"
+                        fbody
+                        "nil)\n(repl-setup)")]
+          (put sess {:op :eval :code code}))))))
 
 (defn init-session
   [client-ip sname]
@@ -369,6 +418,7 @@ send-chat [msg & nicks] ; send message to all or some")
             si   (SessionInfo. s sname rc nick
                              " \n" now now 0 (welcome-msg nick sid))]
         (swap! sessions assoc sid si)
+        (session-setup s)
         sid))))
 
 (defn session-get-nick

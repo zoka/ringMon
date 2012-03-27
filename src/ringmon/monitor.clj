@@ -1,7 +1,7 @@
 (ns ringmon.monitor
   (:require
     [clojure.string            :as string]
-    [clj-json.core             :as json]
+    [ringmon.json              :as json]
     [ring.middleware.resource  :as res]
     [ring.middleware.params    :as param]
     [ring.middleware.file-info :as finfo]
@@ -23,21 +23,24 @@
                         ; to be resolved dynamically
    :ring-handler nil    ; Ring compatible handler
    :port         nil    ; http-server port
-   ; If ringmon runs on its own webserver then last 2 options must be set
-   ; prior to calling ringmon.server/start
+   ; If ringMon is to use an http server other than Jetty
+   ; then :http-server key value needs to be set prior to calling
+   ; the ringmon.server/start
    ;---------------------------------------------------------------------
    ; Browser parameters
    :fast-poll  500      ; browser poll when there is a REPL output activity
    :norm-poll  2000     ; normal browser poll time
    :parent-url ""       ; complete url of the parent application main page (optional)
-   :lein-webrepl nil  ; set if runing in standalone mode in context of lein-webrepl plugin
+   :lein-webrepl nil    ; set if runing in standalone mode in context of the
+                        ; lein-webrepl plugin. May be used to customize the
+                        ; browser behaviour. Also used by nREPL server side
+                        ; to merge :main and :repl-init key values from project.clj
    ;-----------------------------------------------------------------------
    ; access control
    :disabled   nil      ; general disable, if true then check :the auth-fn
    :auth-fn    nil}))   ; authorisation callback, checked only if :disabled is true
                         ; will be passed a Ring request, return true if Ok
 
-(def sampler-started    (atom false))
 (def cpu-load      (atom 0.0))
 (def ajax-reqs-ps  (atom 0.0))   ; ajax requests per second
 (def ajax-reqs-tot (atom 0))     ; total requests
@@ -53,7 +56,7 @@
 
 (defn data-sampler
   []
-  (reset! sampler-started true)
+
   (loop [process-nanos     (get-process-nanos)
          real-nanos        (System/nanoTime)
          ajax-reqs         @ajax-reqs-tot
@@ -133,13 +136,15 @@
           {:CpuLoad          (format "%5.2f%%" @cpu-load)
            :AjaxReqsTotal    @ajax-reqs-tot
            :AjaxReqsPerSec   (format "%7.2f" @ajax-reqs-ps)}
-          :OperatingSystem os
-          :Memory          mem
-          :Threading       th
-          :nREPL           repl      ; nREPL must be before since it carries sid
-          :ReplSessions    sessions
-          :_chatMsg         msg
-          :_config          (extract-config)}))
+         :LeinProject       (repl/get-lein-project)
+         :JMX
+           {:OperatingSystem os
+            :Memory          mem
+            :Threading       th}
+         :nREPL            repl    ; nREPL must be before since it carries sid
+         :ReplSessions     sessions
+         :_chatMsg         msg
+         :_config          (extract-config)}))
 
 (defn do-jvm-gc
   []
@@ -159,11 +164,14 @@
 (defn init-module
   []
   (.start (Thread. data-sampler))
-  (repl/set-mirror-cfg @the-cfg))
+  (repl/set-mirror-cfg @the-cfg)
+  (repl/parse-lein-project))
+
+(def sampler-started    (atom 0))
 
 (defn decode-cmd
   [request client-ip]
-  (when-not @sampler-started
+  (when (compare-and-set! sampler-started 0 1)
     (init-module))
   (let [cmd (keyword (:cmd request))]
     (swap! ajax-reqs-tot inc)

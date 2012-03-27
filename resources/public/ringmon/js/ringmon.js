@@ -737,7 +737,6 @@ function isArray(obj) {
 function typeString(o) {
   if (typeof o != 'object')
     return typeof o;
-
   if (o === null)
       return "null";
   //object, array, function, date, regexp, string, number, boolean, error
@@ -745,7 +744,6 @@ function typeString(o) {
                                                .match(/\[object\s(\w+)\]/)[1];
   return internalClass.toLowerCase();
 }
-
 
 function strAlign(s){
   for (var i = 0; i < s.length; i++) {
@@ -770,7 +768,6 @@ function getAlignment(v) {
       return "left";
   }
 }
-
 
 // search json object jobj for the first instance of
 // object named objname and
@@ -870,18 +867,43 @@ function makeTableRow(element) {
   return s;
 }
 
+function makeTableVal (v) {
+  var vstyle = TreeStyles.Val.light;
+  var valign = ' align="' + getAlignment(v) + '";'
+  var s = "<td" + valign + vstyle+">" + v + "</td>";
+  return s;
+}
+
 function makeTable(arr, ident) {
-  var oldHdr = "";
+  var prevHdr = "";
+  var prevScalar = false;
   var s = tableTag + ident*15 +'"><tr>';
 
   for (ndx in arr) {
-    var hdr = makeTableHdr(arr[ndx]);
-    var row = makeTableRow(arr[ndx])
-    if (hdr != oldHdr)
-      s += hdr;
-    s += row;
-    oldHdr = hdr;
+    if (isArray (arr[ndx])) {
+      var x = arr[ndx];
+      s += makeTableRow(x);
+      prevDScalar = false;
+      prevHdr = "";
+      continue;
+    }
+    if (isObject(arr[ndx])) {
+      var hdr = makeTableHdr(arr[ndx]);
+      var row = makeTableRow(arr[ndx])
+      if (hdr != prevHdr)
+        s += hdr;
+      s += row;
+      prev = hdr;
+      prevScalar = false;
+    } else {
+      if (!prevScalar)
+        s += "<tr>";
+      s += makeTableVal(arr[ndx]);
+      prevScalar = true;
+    }
   }
+  if (prevScalar)
+    s += "</tr>";
   s += "</table>";
   return s;
 }

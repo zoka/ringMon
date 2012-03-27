@@ -1,13 +1,13 @@
 # ringMon
 
-Ring middleware that injects single monitoring page into a Clojure
+A Ring middleware that injects single monitoring page into a Clojure
 web application based on
 [Ring]( https://github.com/mmcgrana/ring)
 library or on higher level web frameworks such as
 [Noir](https://github.com/ibdknox/noir)
 or
 [Compojure](https://github.com/weavejester/compojure).
-It is also easily added as a dev dependency to non-web Clojure applications
+It is also easily added as a dev dependency to any Clojure applications
 as well. Actually, it could be incorporated into any JVM (non-Clojure) application
 with bit more work - planned for later.
 
@@ -159,19 +159,19 @@ built in REPL.
 In this case ringMon runs first:
 
 ```clojure
-lein run -m ringmon.server "{:local-repl true :port 0}"
+lein run -m ringmon.server :local-repl true :port 0
 ```
 This will start a separate Jetty instance on autoselected server
 port just to serve the nREPL page. Your default browser will automatically
-start and load the monitoring page. If `:port` has
+open freh window and load the monitoring page. If `:port` has
 non-zero value then there will be no port autoselection. Default
 value is `8888`.
 
 You can run above command on a remote headless server
 as well - the browser start attempt should fail gracefuly. In this case
 you will want to specify a port that is visible to browser on your desktop.
-Automatic browser activation is disabled by omitting `:local-repl` key or
-by setting it to false or nil.
+Automatic browser window activation is disabled by omitting `:local-repl`
+key or by setting it to false or nil.
 
 At this point your application is not runnning yet.
 You can start it by entering this in nREPL input window:
@@ -180,12 +180,26 @@ You can start it by entering this in nREPL input window:
 (use 'your.app.main.namespace)
 (-main)
 ```
-### Run-time configuration
+There is an easier way to add web based nREPL capability to your
+project if you have Leiningen v 2.0 installed, by using
+installing lein-webrepl plugin and simply entering:
+
+```bash
+lein2 webrepl
+```
+in your project folder. No changes are required  to
+'project.clj`. Note that lein 1.x and 2.0 can be installed side by side.
+See
+[lwin-webrepl GitHub page](https://github.com/zoka/lein-webrepl)
+for more info.
+
+## Run-time configuration
 
 The map bellow shows the default runtime configuration. It is typically
 adjusted before web server starts, but it may be changed later as well.
 
 ```clojure
+
 ; the middleware configuration
 (def the-cfg (atom
   {
@@ -197,19 +211,24 @@ adjusted before web server starts, but it may be changed later as well.
                         ; to be resolved dynamically
    :ring-handler nil    ; Ring compatible handler
    :port         nil    ; http-server port
-   ; If ringmon runs on its own webserver then last 2 options must be set
-   ; prior to calling ringmon.server/start
+   ; If ringMon is to use an http server other than Jetty
+   ; then :http-server key value needs to be set prior to calling
+   ; the ringmon.server/start
    ;---------------------------------------------------------------------
    ; Browser parameters
    :fast-poll  500      ; browser poll when there is a REPL output activity
    :norm-poll  2000     ; normal browser poll time
    :parent-url ""       ; complete url of the parent application main page (optional)
-   :lein-webrepl nil  ; set if runing in standalone mode in context of lein-webrepl plugin
+   :lein-webrepl nil    ; set if runing in standalone mode in context of the
+                        ; lein-webrepl plugin. May be used to customize the
+                        ; browser behaviour. Also used by nREPL server side
+                        ; to merge :main and :repl-init key values from project.clj
    ;-----------------------------------------------------------------------
    ; access control
    :disabled   nil      ; general disable, if true then check :the auth-fn
    :auth-fn    nil}))   ; authorisation callback, checked only if :disabled is true
                         ; will be passed a Ring request, return true if Ok
+
 
 ```
 Use `ringmon.monitor/merge-cfg` to change the configuration

@@ -16,16 +16,16 @@
 ; default configuration for standalone mode
 ; or for using ringmon as equivalent for 'lein repl'
 ; "lein repl" for any Clojure application
-(def loc-cfg (atom {:fast-poll    200  ; assuming running within local
-                    :norm-poll    500  ; machine or on intranet
-                    :port         8888 ; default port, will be autoselected if
-                                       ; set to zero
-                    :local-repl   nil  ; will autostart default browser if true
-                    :ring-handler handler ; redirect to ringMon page
-                    :http-server  nil}))  ; will be Jetty if not set
+(def loc-cfg (atom
+ {:fast-poll    200     ; assuming running within local
+  :norm-poll    500     ; machine or on intranet
+  :port         8888    ; default port, will be autoselected if set to zero
+  :local-repl   nil     ; will open the default browser window if true
+  :ring-handler handler ; simple handler redirect to ringMon page
+  :http-server  nil}))  ; will be Jetty if not set
 
-(defn start-browser
-  "Start the default desktop browser with target uri"
+(defn open-browser-window
+  "Open the default desktop browser window with target uri"
   [target]
   (let [sup (Desktop/isDesktopSupported)]
     (when sup
@@ -78,57 +78,63 @@
   Expects either no parameters (all defaults from @loc-cfg above)
   or configuration map with amended values.
   Returns true if succesful."
-  [& cfg]
+  [cfg]
   (println "[ringMon server] starting with:" cfg)
-  (let [cfg (first cfg)] ; only one optional map expected
-    (when (or (nil? cfg) (map? cfg))
-      (swap! loc-cfg merge cfg)
-      (let [port        (get-port)
-            handler     (:ring-handler @loc-cfg)
-            http-server (get-http-server-start-fn)]
-        (when (and http-server port handler)
-          (monitor/merge-cfg @loc-cfg)
-          (future
-            (http-server handler {:port port}))
+  (when (or (nil? cfg) (map? cfg))
+    (swap! loc-cfg merge cfg)
+    (let [port        (get-port)
+          handler     (:ring-handler @loc-cfg)
+          http-server (get-http-server-start-fn)]
+      (when (and http-server port handler)
+        (monitor/merge-cfg @loc-cfg)
+        (future
+          (http-server handler {:port port}))
+        (when (:local-repl @loc-cfg)
           (Thread/sleep 100) ; allow some time for http-server to start
-          (when (:local-repl @loc-cfg)
-            (start-browser (str"http://localhost:"
-                           (str (:port @loc-cfg))
-                           "/ringmon/monview.html")))
-          true)))))
+          (open-browser-window
+            (str"http://localhost:"
+            (str (:port @loc-cfg))
+            "/ringmon/monview.html")))
+        true))))
 
-(defn string->map
-  [s]
- "Converts configuration map in string form into Clojure map"
-  (if s
-    (try
-      (let [cfg (read-string s)]
-        (if-not (map? cfg)
-          {}
-          cfg))
-      (catch Exception e
-        (println "Invalid configuration map\nException:" e)
-        (Thread/sleep 100)))  ; let the exception print out in peace
-    {}))
+(defn cfg->map
+ [cfg]
+ "Converts list cfg pars in k/v strings form into Clojure map"
+  (if-not cfg
+    {}
+    (let [p (reduce #(str %1 " " %2) cfg)
+          s (str "{" p "}")]
+      (try
+        (let [cfg (read-string s)]
+          (if-not (map? cfg)
+            {}
+            cfg))
+        (catch Exception e
+          (println "Exception:" e)
+          (Thread/sleep 100)
+          nil)))))   ; let the exception print out in peace
 
 (defn -main
  "Command line invocation for standalone mode - to be
   invoked with 'lein run'. Relies on
   'ring/ring-jetty-adapter' being in development dependencies.
-  Expects either no parameters, or one
-  configuration map as a string in quotes. For example:
-  lein run -m ringmon.server \"{:port 10000 :local-repl true}\"
+  Expects either no parameters, or sequence of keyword/value
+  pairs. For example:
+  lein run -m ringmon.server :port 10000 :local-repl true
   This will start the dedicated http-server on port 10000 and
   autostart the browser at the REPL interface page."
   [& cfg-pars]
-  (let [cfg-str (first cfg-pars)
-        cfg     (string->map cfg-str)
-        ok      (start cfg)]
-        (print "The standalone ringMon ")
+  (let [cfg (cfg->map cfg-pars)]
+    (if-not cfg
+      (println
+        "Command line parmaters must be supplied as keyword/value pairs:\n"
+        "for example:  :port 9999 :local-repl true")
+    (let [ok (start cfg)]
+      (print "The standalone ringMon ")
         (if ok
           (println (str "up and running using port "
                      (:port @loc-cfg)"."))
-          (println "failed to start."))))
+          (println "failed to start."))))))
 
 
 
