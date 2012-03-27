@@ -188,7 +188,7 @@ installing `lein-webrepl` plugin and simply entering:
 lein2 webrepl
 ```
 in your project folder. No changes are required  to
-'project.clj`. Note that lein 1.x and 2.0 can be installed side by side.
+`project.clj`. Note that lein 1.x and 2.0 can be installed side by side.
 See
 [lein-webrepl GitHub page](https://github.com/zoka/lein-webrepl)
 for more info.
