@@ -121,6 +121,10 @@
                          :parent-url
                          :lein-webrepl]))
 
+;; Can't serialize JMX entries without this
+(defn- object-name-str [x]
+  (update-in x [:ObjectName] str))
+
 (defn get-mon-data
   [sname client-ip]
   (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
@@ -138,9 +142,9 @@
            :AjaxReqsPerSec   (format "%7.2f" @ajax-reqs-ps)}
          :LeinProject       (repl/get-lein-project)
          :JMX
-           {:OperatingSystem os
-            :Memory          mem
-            :Threading       th}
+           {:OperatingSystem (object-name-str os)
+            :Memory          (object-name-str mem)
+            :Threading       (object-name-str th)}
          :nREPL            repl    ; nREPL must be before since it carries sid
          :ReplSessions     sessions
          :_chatMsg         msg
