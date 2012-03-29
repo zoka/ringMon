@@ -122,27 +122,31 @@
                          :lein-webrepl]))
 
 (defn get-mon-data
-  [sname client-ip]
+  [sname client-ip ring-sess]
   (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
         mem (jmx/mbean "java.lang:type=Memory")
         ; java.jmx returns Java arrays which json parser can not handle
         ; and thread id values are not interesting anyway
         th  (dissoc (jmx/mbean "java.lang:type=Threading") :AllThreadIds)
+        ; fetch relevant session info
+        sid  (repl/get-sess-id sname client-ip ring-sess) ; convert internal browser name to sid
+        repl (repl/do-poll sid)
         sessions (repl/session-stats)
-        repl (repl/do-cmd "" sname client-ip)
-        msg  (repl/get-chat-msg sname client-ip)]
+        msg  (repl/fetch-session-msg-top sid)      ; append to top window
+        rb   (repl/fetch-session-buf-bottom sid)]  ; replace the entrire bottom  buffer
 
         {:Application
           {:CpuLoad          (format "%5.2f%%" @cpu-load)
            :AjaxReqsTotal    @ajax-reqs-tot
            :AjaxReqsPerSec   (format "%7.2f" @ajax-reqs-ps)}
-         :LeinProject       (repl/get-lein-project)
+         :LeinProject        (repl/get-lein-project)
          :JMX
            {:OperatingSystem os
             :Memory          mem
             :Threading       th}
          :nREPL            repl    ; nREPL must be before since it carries sid
          :ReplSessions     sessions
+         :_replBuf         rb    ;remote update for REPL input buffer (init conn, invites)
          :_chatMsg         msg
          :_config          (extract-config)}))
 
@@ -152,14 +156,38 @@
   {:resp "ok"})
 
 (defn send-chat
-  [msg to sname client-ip]
-  (repl/send-chat-msg msg to sname client-ip)
+  [sname msg to client-ip ring-sess]
+  (repl/send-chat-msg sname msg to client-ip ring-sess )
   {:resp "ok"})
 
 (defn set-chat-nick
-  [nick sname client-ip]
-  (let [old-nick (repl/set-chat-nick nick sname client-ip)]
+  [sname nick client-ip ring-sess]
+  (let [old-nick (repl/set-chat-nick sname nick client-ip ring-sess)]
     {:resp "ok" :old-nick old-nick}))
+
+(def ringmon-host-url (atom nil))
+
+(defn gen-invite
+  [sname to from msg sid client-ip]
+  (let [[name invite-pars] 
+         (repl/register-invite sname to from msg client-ip)]
+    { :resp "ok"
+      :name name
+      :url 
+       (str @ringmon-host-url
+            "/ringmon/monview.html"
+            invite-pars)}))
+
+(defn check-for-invite
+  [params ring-sess]
+  )
+
+(defn get-host-url
+  [req]
+  (let [srv  (:server-name req)
+        port (:server-port req)
+        tp   (name(:scheme req))]
+    (str tp "://" srv ":" port)))
 
 (defn init-module
   []
@@ -170,23 +198,33 @@
 (def sampler-started    (atom 0))
 
 (defn decode-cmd
-  [request client-ip]
+  [params client-ip ring-sess]
   (when (compare-and-set! sampler-started 0 1)
     (init-module))
-  (let [cmd (keyword (:cmd request))]
+  (let [cmd   (keyword (:cmd params))
+        sname (:sname params)]
     (swap! ajax-reqs-tot inc)
     (case cmd
-      :get-mon-data  (get-mon-data  (:sess request) client-ip)
-      :do-jvm-gc     (do-jvm-gc)
-      :do-repl       (repl/do-cmd   (:code request) (:sess request) client-ip)
-      :repl-break    (repl/break    (:sess request) client-ip)
-      :send-chat     (send-chat     (:msg request)  (:to request) (:sess request) client-ip)
-      :set-chat-nick (set-chat-nick (:nick request) (:sess request) client-ip)
+      :get-mon-data  
+        (get-mon-data sname client-ip ring-sess)
+      :do-jvm-gc     
+        (do-jvm-gc)
+      :do-repl       
+        (repl/submit-form sname (:code params) client-ip ring-sess )
+      :repl-break    
+        (repl/break sname client-ip ring-sess)
+      :send-chat     
+        (send-chat sname (:msg params) (:to params) client-ip ring-sess)
+      :set-chat-nick 
+        (set-chat-nick sname (:nick params) client-ip ring-sess)
+      :gen-invite
+        (gen-invite sname (:to params) (:from params) (:msg params) 
+                           client-ip ring-sess)
       {:resp "bad-cmd"})))
 
 (defn ajax
-  [params client-ip]
-  (let [reply    (decode-cmd params client-ip)
+  [params client-ip ring-sess]
+  (let [reply    (decode-cmd params client-ip ring-sess)
         j-reply  (json/generate-string reply)]
     j-reply))
 
@@ -219,11 +257,19 @@
     (let [uri (:uri req)]
       (if (ringmon-req? uri)
         (if (ringmon-allowed? req)
-          (if (= uri "/ringmon/command")
-            (let [params (clojure.walk/keywordize-keys (:query-params req))
-                  client-ip (get-client-ip req)]
-              (response/response(ajax params client-ip)))
-            (handler req))
+          (let [params (clojure.walk/keywordize-keys (:query-params req))
+                client-ip (get-client-ip req)
+                ring-sess (get
+                            (get 
+                              (:cookies req) "ring-session") :value)]
+            (when-not @ringmon-host-url
+              (reset! ringmon-host-url (get-host-url req)))
+            (if (= uri "/ringmon/command")
+              (response/response (ajax params client-ip ring-sess))
+              (do
+                (when params
+                  (check-for-invite params ring-sess))
+                (handler req))))
           (response/response "Not allowed"))
         (handler req)))))
 
@@ -255,5 +301,6 @@
 (defn merge-cfg
   [cfg]
   (when (map? cfg)
-    (swap! the-cfg merge cfg)))
+    (swap! the-cfg merge cfg)
+    (repl/set-mirror-cfg @the-cfg))) ; make sure the mirror is up to date
 

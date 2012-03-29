@@ -15,14 +15,14 @@
             (java.text SimpleDateFormat)
             (java.net InetAddress)))
 
-(defn set-to-vec
+(defn- set-to-vec
  "Convert set containing keywords into
   vector of strings."
   [s]
   (let [v (map #(name %1) s)]
     (vec v)))
 
-(defn patch-from-srv-msg
+(defn- patch-from-srv-msg
  "Patch message sent by nREPL server before it gets
   delivered to client.
   First keywordize everything.
@@ -43,7 +43,7 @@
         ;(println "srv-> patched:" k)
         k))))
 
-(defn patch-from-client-msg
+(defn- patch-from-client-msg
  "Patch message sent by client
   before it gets delivered to nREPL server.
   If there are any map values that are keywords
@@ -116,7 +116,7 @@
            (.clear client-q)))] ; safe to clear incomming queue
   [client-transport server-transport]))
 
-(defn connect
+(defn- connect
   "Connects to nREPL server within the same procees using
    the pair of LinkedBlockedQueue instances.
    There is no real server here, just a
@@ -148,24 +148,8 @@
   (get-pending [this] (get-pending-fn))
   (close [this]       (close-fn)))
 
-
-(defn peek-q
-  [q]
-  (let [e (peek q)]
-    (get e 0)))  ; return cid field only
-
-(defn dump-q
-  [q]
-  (loop [n (count q) i 0]
-    (if (zero? n)
-      i
-      (let [e (nth q i)]
-        (println i"=" (get e 0))
-        (println (get e 1))
-        (recur (dec n) (inc i))))))
-
-(defn my-new-session
- "This is a mirror of repl/new-session, so it can be observed why it sometimes
+(defn- my-new-session
+ "This is a replica of repl/new-session, so it can be observed why it sometimes
   throws an exception. When nil reply is received simply try again."
   [client]
   (loop [c 10]
@@ -182,7 +166,14 @@
             (Thread/sleep 50)     ; try yo wait longer, was 10
             (recur (dec c))))))))
 
-(defn session-instance
+(defn- peek-q
+  [q]
+  (let [e (peek q)]
+    (get e 0)))  ; return cid field only
+
+(defn- session-instance
+ "Return a new instance of nREPL sesion. The timeout is value
+  of client transport timeout in ms. Recomended value is 10 ms."
   [timeout]
   (let [conn        (connect)
         client      (repl/client conn timeout) ; short timeout required (10 ms)
@@ -243,54 +234,62 @@
             ;(println "Close rep" r)
             (.close conn)))))))  ; important: deftype method is accessed as any Java class method
 
-(defn first-line
+(defn- first-line
+ "Return the first line of a multiline string."
   [s]
   (when s
     (first (string/split s #"\n"))))
 
-(defn uuid-last
-  [uuid]
-  (when uuid
-    (last (string/split uuid #"-"))))
-
 (defprotocol SessionStats
-  (get-stats [this sid] "Returns stats map"))
+  (get-stats [this sid] "Returns the session stats map"))
 
-(defrecord SessionInfo [sess
-                        sname
-                        client-host
-                        nick
-                        last-code
-                        last-req-time
-                        last-cmd-time
-                        total-ops
-                        msg]
+(defrecord SessionInfo
+ [sess           ; session instance
+  sname          ; session name
+  client-host    ; client internet address or host name
+  nick           ; chat nickname
+  last-code      ; last code executed
+  last-req-time  ; last data request time [ms]
+  last-cmd-time  ; last command time [ms]
+  total-ops      ; total ops (reqs+commands)
+  top-msg        ; top window message to append
+  bot-buf]       ; bottom window whole buffer to replace
   SessionStats
   (get-stats [this sid]
     (let [now (System/currentTimeMillis)
           lc  (first-line last-code)]
-      {:Client   client-host
-       :SessName sname
-       :SessId   sid
-       :ChatNick nick
-       :LastCode lc
-       :DataReq  (format "%7.3f" (/ (- now last-req-time) 1000.0))
-       :CmdReq   (format "%7.3f" (/ (- now last-cmd-time) 1000.0))
-       :TotalOps total-ops})))
+     {:Client   client-host
+      :SessName sname
+      :SessId   sid
+      :ChatNick nick
+      :LastCode lc
+      :DataReq  (format "%7.3f" (/ (- now last-req-time) 1000.0))
+      :CmdReq   (format "%7.3f" (/ (- now last-cmd-time) 1000.0))
+      :TotalOps total-ops})))
 
-(def sessions (atom {}))  ;; active sessions map of sid to SessionInfo
-(def active-session-count (atom 0))
+(def ^{:doc "Map of active session ids to SessionInfo records."}
+  sessions (ref {}))
 
-(defn get-sess-count
+(def ^{:doc "Map of pending invite ids to Invite records."}
+  records (ref {}))
+
+(def ^{:doc "Calculated by check-sessions every 2 seconds."}
+  active-session-count (atom {}))
+
+(defn- get-sess-count
+ "Return the total number of existing sessions."
   []
   (let [k (keys @sessions)]
     (count k)))
 
-(defn get-active-sess-count
+(defn- get-active-sess-count
+ "Return the number of active sessions. A session is considered active
+  if client is issued at least one data request in the last 10 seconds."
   []
   @active-session-count)
 
 (defn session-stats
+ "Return the entire sessions statistics, ready to be encoded to JSON."
   []
   (let [svec (into []
         (for [[sid si] @sessions] (get-stats si sid)))]
@@ -298,45 +297,45 @@
       :Active @active-session-count
       :Info   svec}))
 
-(defn check-session
- "Returns one if octive so it can be counted, zero otherwise"
+(defn- check-session
+ "Returns one if octive, so it can be counted, zero otherwise"
   [sid]
-  (when-let [si   (get @sessions sid)]
+  (if-let [si (get @sessions sid)]
     (let [now (System/currentTimeMillis)]
-      ; close the session if less than 5 requests in first 30 seconds
-      (when (and (< (:total-ops si) 5)
+      ; close the session if it did less than 10 requests in first 30 seconds
+      (when (and (< (:total-ops si) 10)
               (> (- now (:last-req-time si)) 30000))
         (let [sess (:sess si)]
-          (println "Closing dead session, sid=" sid)
-          (swap! sessions dissoc sid)
+          (println "Closing spurious session, sid =" sid)
+          (dosync (alter sessions dissoc sid))
           (close sess)))
-      (if (> (- now (:last-req-time si)) 10000) ; 10 seconds of inactivity
+      (if (> (- now (:last-req-time si)) 10000) ; 10 seconds of silence
         0                                       ; makes session inactive
-        1))))
+        1))
+    0))
 
 (defn check-sessions
+ "Check all sessions. Called periodically by monitor/data-sampler."
   []
   (let [sids (keys @sessions)
         acnt (reduce + (map check-session sids))]
     (reset! active-session-count acnt)))
 
 (defn valid-session?
+ "Return true if sid represents an existing session id."
   [sid]
   (let [s (get @sessions sid)
         r (not= s nil)]
     r))
 
-(def user-no (atom 0))
-(defn get-nick
-  []
-  (let [n (swap! user-no inc)]
-    (str "clojurian-" n)))
+(def ^{:doc "The mirror of the main configuration.
+              kept in ringmon.monitor."}
+  mirror-cfg (atom {}))
 
+(def ^{:doc "Leiningen project map."}
+  lein-project (atom {}))
 
-(def mirror-cfg (atom {}))
-(def lein-project (atom {}))
-
-; taken from marginalia.core
+; project.clj parsing functions, taken from marginalia.core
 (defn- parse-project-form
   [[_ project-name version-number & attributes]]
   (merge {:name (str project-name)
@@ -353,37 +352,40 @@
         (parse-project-form (read rdr)))
       (catch Exception e)))) ; fail silently and return nil
 
-(defn parse-lein-project    ; called from monitor only once on init
+(defn parse-lein-project
+ "Called from monitor on startup."
   []
   (let [p (parse-project-file)]
     (when p
       (reset! lein-project (merge p (:lein-webrepl @mirror-cfg))))))
 
 (defn get-lein-project
+ "Return previously parsed project map."
   []
   @lein-project)
 
 (defn set-mirror-cfg
+ "Updates value of mirrored configurarion."
   [cfg]
   (reset! mirror-cfg cfg))
 
-(defn welcome-msg
-  [nick sid]
-  (if-not (:lein-webrepl @mirror-cfg)
-  (str "Welcome to nREPL. Your chat nick is '" nick
-    "'.\nTo change it, uncheck 'Confirm', modify 'Chat as' and check 'Confirm' again.
-Just for fun, same can be done with this two liner:
+(def demo-code-snippet
+"(loop [i 0]
+  (println \"i =\"i)
+  (Thread/sleep 1000)
+  (if (< i 10)
+    (recur (inc i))
+    i))      ; Press Ctrl-Enter or 'Execute' button to execute.
+             ; Once started, the execution of this Clojure snippet
+             ; can be stopped by 'Interrupt' button.
 
-(use 'ringmon.api)         ; just paste it into nREPL input window below,
-(set-nick \"your-new-nick\") ; adjust the nick and press the 'Execute' button.
+             ; Press Ctrl-Down while having 'nREPL Input' window
+             ; in focus to get the snippet out of the way.
+             ; Press Ctrl-Up to recall it back from the history.")
 
-More chat functions are avaliable in ringmon.api namespace:
-get-nick[]              ; get your nick
-chat-nicks[]            ; get vector of all active nicks
-send-chat [msg & nicks] ; send message to all or some")
-  (str "Welcome to lein-webrepl plugin. Your session id is " sid ".")))
-
-(defn session-setup
+(defn- setup-repl
+ "Autogenerate and execute a small function to setup REPL
+  environment gor session 'sess', based on project.clj settings."
   [sess]
   (let [repl-init-ns (:repl-init @lein-project)
         main-ns      (:main      @lein-project)
@@ -396,58 +398,99 @@ send-chat [msg & nicks] ; send message to all or some")
        (.write sw (str "(in-ns '"repl-init-ns")\n"))
        (when main-ns
          (.write sw (str "(in-ns '"main-ns")\n"))))
+    ; if neiter :repl-init or :main are defined, nREPL already defaults to
+    ; 'user' namespace
     (let [fbody (.toString sw)]
       (when (not= fbody "")
-        (let [code (str "(defn repl-setup\n[]\n"
+        (let [code (str "(defn setup-repl\n[]\n"
                         fbody
-                        "nil)\n(repl-setup)")]
+                        "nil)\n(setup-repl)")]
           (put sess {:op :eval :code code}))))))
 
-(defn init-session
-  [client-ip sname]
- "note: the low timeout value of 10 ms for session means
-  that client will not stay blocked after submitting a
-  long duration command such as '(Thread/sleep 1000)'"
+(defn chat-nicks
+ "Return set of all registered nicks so far."
+  []
+  (into #{} (for [[sid si] @sessions] (:nick si))))
+
+(defn- ensure-sane-name
+  [s]
+  (let [s (string/trim s)
+        r (.replaceAll s "[^a-zA-Z0-9]" "x")]
+     r))
+
+(defn- unique-name
+[name  names]
+  (let [name (ensure-sane-name name)]
+    (if-not (contains? names name)
+      name
+      (loop [try 1]
+        (let [name  (str name "-" try)]
+          (if-not (contains? names name)
+            name
+            (recur (inc try))))))))
+
+(defn- setup-session
+  [sess-instance ring-sess]
+  ["Clojurian" demo-code-snippet])
+
+(defn- init-session
+ "Initialize the new REPL session and put it in sessions map.
+  Note: the low timeout value of 10 ms for session means
+  that client will not stay blocked for long after submitting a
+  long duration command such as '(Thread/sleep 1000)'."
+  [sname client-ip ring-sess]
   (let [s   (session-instance 10)]
     (when (and s (get-id s))
-      (let [sid  (get-id s)
-            now  (System/currentTimeMillis)
-            ia   (InetAddress/getByName client-ip)
-            rc   (.getCanonicalHostName ia)
-            nick (get-nick)
-            si   (SessionInfo. s sname rc nick
-                             " \n" now now 0 (welcome-msg nick sid))]
-        (swap! sessions assoc sid si)
-        (session-setup s)
+      (let [sid     (get-id s)
+            now     (System/currentTimeMillis)
+            ia      (InetAddress/getByName client-ip)
+            rc      (.getCanonicalHostName ia)
+            [nick   bot-buf] (setup-session s ring-sess)]
+        (dosync
+          (let [nick (unique-name nick (chat-nicks))
+                si (SessionInfo.
+                    s
+                    sname
+                    rc
+                    nick
+                    " \n"
+                    now
+                    now
+                    0
+                    (format "Welcome to nREPL. Your nickname is %s.", nick)
+                    bot-buf)]
+            (alter sessions assoc sid si)))
+        (setup-repl s)
         sid))))
 
-(defn session-get-nick
+(defn- get-session-nick
+ "Get session nick."
   [sid]
   (let [si (get @sessions sid)]
     (when si
       (:nick si))))
 
-(defn chat-nicks
-  []
-  (into [] (for [[sid si] @sessions] (:nick si))))
-
-(defn session-append-msg
+(defn append-session-top-msg
+ "Append to the pending message for REPL out window of the session."
 [sid msg]
 (let [s (:sess (get @sessions sid))]
   (when s
-    (locking s
+    (dosync
       (let [si       (get @sessions sid)
             old-msg  (:msg si)]
         (if (= old-msg "")
-          (swap! sessions assoc sid (assoc si :msg msg))
-          (swap! sessions assoc sid (assoc si :msg (str old-msg "\n" msg)))))))))
+          (alter sessions assoc sid (assoc si :top-msg msg))
+          (alter sessions assoc sid (assoc si :top-msg (str old-msg "\n" msg)))))))))
 
 (def date-format (SimpleDateFormat. "HH:mm:ss"))
 (defn time-now
+ "Return time of the dat in above format."
   []
   (.format date-format (Date.)))
 
 (defn nicks-to-str
+ "Convert set of nicks into bracket enclosed list,
+  but only if there is more then one of them."
   [nicks]
   (loop [r "" nicks nicks count 0]
     (if (empty? nicks)
@@ -459,109 +502,101 @@ send-chat [msg & nicks] ; send message to all or some")
         (recur (str r " " nick) (disj nicks nick) (inc count))))))
 
 (defn send-chat
-  [sid msg nicks]
+ "Send chat message on behalf of the given session to all, or just some."
+ ([sid msg]
+  (send-chat sid msg []))
+ ([sid msg nicks]
   (when (and sid msg (not (string/blank? msg )))
-    (let [my-nick  (session-get-nick sid)
+    (let [my-nick  (get-session-nick sid)
           nicks (disj (into #{} nicks) my-nick)] ; do not send message to self
       (when my-nick
         (if (empty? nicks)
           (let [m (str (time-now) " "my-nick": " msg) ; send to all
                 k (keys @sessions)]
-            (dorun (map #(session-append-msg %1 m) k)))
+            (dorun (map #(append-session-top-msg %1 m) k)))
           (let [to-send (disj (into #{}
                  (for [[sid si] @sessions]
                    (when (contains? nicks (:nick si)) sid))) nil)
                 to-nicks (disj (into #{}
-                  (for [sd to-send] (session-get-nick sd))) nil)
+                  (for [sd to-send] (get-session-nick sd))) nil)
                 to-list (nicks-to-str to-nicks)
                 m (str (time-now) " "my-nick"=>"to-list": " msg)]
             (when-not (empty? to-send)
-              (session-append-msg sid m) ; message to self with recipents list
+              (append-session-top-msg sid m) ; message to self with recipents list
               (loop [sids to-send]
                 (if (empty? sids)
                   true
                   (let [to-sid (first sids)
-                        nick   (session-get-nick to-sid)
+                        nick   (get-session-nick to-sid)
                         m      (str (time-now) " "my-nick"=>you: " msg)]
-                    (session-append-msg to-sid m)
-                    (recur (disj sids to-sid))))))))))))
+                    (append-session-top-msg to-sid m)
+                    (recur (disj sids to-sid)))))))))))))
 
-(defn ensure-no-inner-space-or-col
-  [s]
-  (let [s (string/trim s)
-        t (.replaceAll s " " "-")
-        r (.replaceAll t ":" "-")]
-     r))
+(defn- set-session-nick
+  [sid nick]
+  (when-let [my-si (get @sessions sid)]
+    (when-not (string/blank? nick)
+      (let [old-nick (ref nil)
+            new-nick (ref nil)]
+        (dosync
+          (let [old (:nick my-si)
+               nicks (into #{} (chat-nicks))]
+               (when (not= old nick)
+                 (let [nick (unique-name nick nicks)]
+                   (alter sessions assoc sid (assoc my-si :nick nick))
+                   (ref-set old-nick old)
+                   (ref-set new-nick nick)))))
+        (when @old-nick
+          (send-chat sid (str "Nick changed from '"
+                               @old-nick "' to '" @new-nick"'.") []))
+        @old-nick))))
 
-(defn make-nick
-[nick nicks]
-(if-not (contains? nicks nick)
-  nick
-  (loop [try 1]
-    (let [nick (str nick "-" try)]
-      (if-not (contains? nicks nick)
-        nick
-        (recur (inc try)))))))
-
-(defn session-set-nick
- [sid nick]
- (let [my-si (get @sessions sid)]
-  (when (and my-si (not (string/blank? nick)))
-    (let [nick (ensure-no-inner-space-or-col nick)]
-      (locking my-si
-        (let [old   (:nick my-si)
-              nicks (into #{} (chat-nicks))]
-          (if (not= old nick)
-            (let [nick (make-nick nick nicks)]
-              (swap! sessions assoc sid (assoc my-si :nick nick))
-              (send-chat
-                sid (str
-                  "Changed the nick from '" old
-                  "' to '" nick"'.") [])
-              old)
-            nil)))))))
-
-(defn session-fetch-msg
+(defn fetch-session-msg-top
+  "Fetch a pending message(s) for the top REPL window, if any"
   [sid]
-  (let [s (:sess (get @sessions sid))]
-    (when s
-      (locking s
-        (let [si   (get @sessions sid)
-              msg  (:msg  si)]
-          (swap! sessions assoc sid
-            (assoc si :msg ""))
-          msg)))))
+  (dosync
+    (when-let [si (get @sessions sid)]
+      (let [msg (:top-msg  si)]
+        (alter sessions assoc sid (assoc si :top-msg ""))
+        msg))))
 
-(defn session-put
+(defn fetch-session-buf-bottom
+  "Fetch the fresh buffer for the bottom repl window, if any."
+  [sid]
+  (dosync
+    (when-let [si (get @sessions sid)]
+      (let [msg (:bot-buf  si)]
+        (alter sessions assoc sid (assoc si :bot-buf ""))
+        msg))))
+
+(defn- put-session-cmd
+ "Put the command into the session."
   [sid cmd]
-  (let [s (:sess (get @sessions sid))]
-    (when s
-      (locking s
-        (let [si   (get @sessions sid)
-              tops (:total-ops si)]
-          (swap! sessions assoc sid
-            (assoc si
-              :last-code     (:code cmd)
-              :last-cmd-time (System/currentTimeMillis)
-              :total-ops     (inc tops)))))
-      (put s cmd))))
+  (when-let [s (:sess (get @sessions sid))]
+    (dosync
+      (when-let [si (get @sessions sid)]
+        (let [tops (:total-ops si)]
+          (alter sessions assoc sid ( assoc si
+            :last-code     (:code cmd)
+            :last-cmd-time (System/currentTimeMillis)
+            :total-ops (inc tops))))))
+    (put s cmd)))
 
-(defn session-poll
+(defn- poll-session
+ "Poll session for pending output."
   [sid]
-  (let [s (:sess (get @sessions sid))]
-    (when s
-      (locking s
-        (let [si   (get @sessions sid)
-              tops (:total-ops si)]
-          (swap! sessions assoc sid
-            (assoc si
-              :last-req-time (System/currentTimeMillis)
-              :total-ops     (inc tops)))))
-      (poll s))))
+  (when-let [s (:sess (get @sessions sid))]
+    (dosync
+      (when-let [si (get @sessions sid)]
+        (let [tops (:total-ops si)]
+          (alter sessions assoc sid ( assoc si
+            :last-req-time (System/currentTimeMillis)
+            :total-ops (inc tops))))))
+    (poll s)))
 
 (def ^:const session-age (str (* 3600 24 30)))
 
-(defn get-active-browser-sessions
+(defn- get-active-browser-sessions
   []
   (let [s (cookies/get :repl-sess)]
     (if (= s nil)
@@ -578,11 +613,14 @@ send-chat [msg & nicks] ; send message to all or some")
                   (recur r (rest m)))))))))))
 
 (defn get-sess-id
-  [sname client-ip]
+ "Makes sure that there is a valid session behind a sname,
+  that is supplied by client. If not, a new session
+  wil be established and cookie updated. Returns session id."
+  [sname client-ip ring-sess]
   (let [as  (get-active-browser-sessions)
         sid (get as sname)]
     (if-not sid
-      (let [new-sid (init-session client-ip sname)
+      (let [new-sid (init-session sname client-ip ring-sess)
             new-as  (assoc as sname new-sid)
             cval (json/generate-string new-as)]
         ;(println "new session map id (valid 30 days):" cval sname)
@@ -597,48 +635,49 @@ send-chat [msg & nicks] ; send message to all or some")
   []
   (second (first (get-active-browser-sessions))))
 
-(defn do-cmd
-  [code sname client-ip]
-  (let [sid (get-sess-id sname client-ip)]
-    (when sid
-      (if (not= code "")
-        (let [r (session-put sid {:op :eval :code code})]
-          ;(println "put response:"r)
-          r)
-        (let [r (session-poll sid)]
-          ;(when-not (empty? r) (println "bkg polled:" r))
-          r)))))
+(defn do-poll
+  [sid]
+  (let [r (poll-session sid)]
+    ;(when-not (empty? r) (println "bkg polled:" r))
+    r))
 
-(defn get-chat-msg
-  [sname client-ip]
-  (let [sid (get-sess-id sname client-ip)]
-    (when sid
-      (let [m (session-fetch-msg sid)]
-        m))))
+(defn submit-form
+  [sname code client-ip ring-sess]
+  (when-let [sid (get-sess-id sname client-ip ring-sess)]
+    (when (not= code "")
+      (let [r (put-session-cmd sid {:op :eval :code code})]
+        ;(println "submit-form response:"r)
+        r))))
 
 (defn send-chat-msg
-  [msg to sname client-ip]
-  (when-let [sid (get-sess-id sname client-ip)]
+  [sname msg to client-ip ring-sess ]
+  (when-let [sid (get-sess-id sname client-ip ring-sess)]
     (if (= to "")
       (send-chat sid msg [])
       (send-chat sid msg [to]))))
 
 (defn set-chat-nick
-  [nick sname client-ip]
-  (when-let [sid (get-sess-id sname client-ip)]
-    (session-set-nick sid nick)))
+  [sname nick client-ip ring-sess]
+  (when-let [sid (get-sess-id sname client-ip ring-sess)]
+    (set-session-nick sid nick)))
 
 (defn break
-  [sname client-ip]
-  (let [sid (get-sess-id sname client-ip)]
-    (when sid
-      (let [s (:sess (get @sessions sid))]
-        (when s
-          (let [cid (get-pending s)]
-            ;(println "requesting break for" cid)
-            (if cid
-              (let [r (put s {:op :interrupt :interrupt-id cid})]
-                ;(println "break response:" r)
-                r)
-              (println "break: no command pending"))))))))
+  [sname client-ip ring-sess]
+  (when-let [sid (get-sess-id sname client-ip ring-sess)]
+    (let [s (:sess (get @sessions sid))]
+      (when s
+        (let [cid (get-pending s)]
+          ;(println "requesting break for" cid)
+          (if cid
+            (let [r (put s {:op :interrupt :interrupt-id cid})]
+              ;(println "break response:" r)
+              r)
+            (println "break: no command pending")))))))
+
+(defn register-invite
+  [sname to from msg client-ip]
+  (let [inv-id (repl.misc/uuid)
+        to (ensure-sane-name to)]
+    [to  (str "?inviteid=" inv-id)]))
+
 

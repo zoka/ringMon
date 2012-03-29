@@ -34,6 +34,7 @@
     <button id="getmondata" style="margin-left:15px;">Refresh Data</button>
     <input type="checkbox" id="periodic" >Periodic </input>
     <button id="dojvmgc" style="margin-left:15px;" >Force JVM GC</button>
+
     <span style="margin-left:15px;">Chat as</span>
     <input
       type="text"
@@ -60,10 +61,12 @@
     <span>
       <button id="submit" style="margin-left:0px;">Execute</button>
       <span>the current buffer/selection [<em>Ctrl-Enter</em>].</span>
+
       <button id="sendmsg" style="margin-left:10px;">Send</button>
-      <span>the current buffer/selection as a chat message.</span>
+      <span id="sendmsgt">the current buffer/selection as a chat message.</span>
+
       <button id="invite" style="margin-left:10px;">Invite</button>
-      <span>other people to join the conversation.</span>
+      <span>other people to join the coding/conversation.</span>
     </span>
     <textarea id="Cloj">
     </textarea>

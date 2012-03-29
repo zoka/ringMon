@@ -93,7 +93,7 @@ var lastAjaxRequestTime = 0;
 var nReplPending = false;
 var dataDisplay = false;
 
-var replSession="One";
+var replSessionName="One";
 var replSessionId = "";
 var replPrinter;
 
@@ -115,6 +115,7 @@ $(document).ready(function() {
   $("#irq").click(replBreak);
   $("#submit").click(clickReplSubmit);
   $("#sendmsg").click(clickSendMsg);
+  $("#invite").click(clickInvite);
 
   // initial refresh
   clickGetMonData();
@@ -153,13 +154,16 @@ $(document).ready(function() {
   $("#mynick").attr("readonly",true);
   $('#nick-confirm').on('change', function () {
     if ($(this).is(':checked')) {
-      doChangeNick($("#mynick").val());
+      var ok = doChangeNick($("#mynick").val());
+      if (!ok)
+        $("#mynick").val(myChatNick);
       $("#mynick").attr("readonly",true);
     } else {
       $("#mynick").attr("readonly",false);
       $("#mynick").focus();
     }
   });
+  nicksUpdate(chatNicks);
 });
 
 
@@ -241,9 +245,16 @@ function compareStringArrays(a,b) {
 
 function nicksUpdate(nicks) {
   $("#nicks").empty();
-  $("#nicks").append("<option>All people</option>");
-  for (var i in nicks) {
-    $("#nicks").append("<option>"+nicks[i]+"</option>");
+  if (sessCount < 2) {
+    $("#sendmsg").hide();
+    $("#sendmsgt").hide();
+  } else {
+    $("#sendmsg").show();
+    $("#sendmsgt").show();
+    $("#nicks").append("<option>All people</option>");
+    for (var i in nicks) {
+      $("#nicks").append("<option>"+nicks[i]+"</option>");
+    }
   }
 }
 
@@ -261,7 +272,7 @@ function handleSessionInfo (jdata) {
   for (obj in jdata) {
     var val = jdata[obj];
     if (!isObject (val)) {
-      if (obj == "Count")
+      if (obj == "Total")
         sessCount = val;
       continue;
     }
@@ -289,23 +300,12 @@ function handleSessionInfo (jdata) {
   }
 }
 
-function replRefresh(){
-  // same command, but empty code buffer
-  // means  we just want refresh for long running repl script output
-  // should not be needed when we get WebSockets
-  doAjaxCmd (
-    {
-      cmd: "do-repl",
-      code: "",
-      sess: replSession
-    });
-}
 
 function replBreak() {
   doAjaxCmd (
   {
-    cmd: "repl-break",
-    sess: replSession
+    cmd:   "repl-break",
+    sname: replSessionName
   });
 }
 
@@ -325,7 +325,7 @@ function sendChatMsg(e) {
     ndxHist = nextHistNdx; // history pointer past freshest item
     if (ndxHist > 1) {
       if (replHist[ndxHist-1] == replHist[ndxHist-2]) {
-        // do not polute history with same buffer values
+        // do not polute history with the same buffer values
         ndxHist--;
         nextHistNdx--;
       }
@@ -341,10 +341,10 @@ function sendChatMsg(e) {
   $("#sendmsg").attr("disabled", false);   // disable Send button
   doAjaxCmd (
   {
-    cmd: "send-chat",
-    msg: b,
-    to:  to,
-    sess: replSession
+    cmd:  "send-chat",
+    msg:   b,
+    to:    to,
+    sname: replSessionName
   });
 }
 
@@ -353,12 +353,19 @@ function clickSendMsg() {
 }
 
 function doChangeNick(newNick) {
+  newNick=trim(newNick);
+  if (newNick == "")
+    return false;
+  if (newNick == myChatNick)
+    return false;
+  newNick = newNick.substring(0, 15); /// max 15 characters
   doAjaxCmd (
   {
-    cmd: "set-chat-nick",
-    nick: newNick,
-    sess: replSession
+    cmd:   "set-chat-nick",
+    nick:  newNick,
+    sname: replSessionName
   });
+  return true;
 }
 
 function handleChatMsg(m) {
@@ -396,7 +403,7 @@ function replSubmit(e) {
     ndxHist = nextHistNdx; // history pointer past freshest item
     if (ndxHist > 1) {
       if (replHist[ndxHist-1] == replHist[ndxHist-2]) {
-        // do not polute history with same buffer values
+        // do not polute history with the same buffer values
         ndxHist--;
         nextHistNdx--;
       }
@@ -407,9 +414,9 @@ function replSubmit(e) {
   $("#irq").attr("disabled", false);   // enable interrupt button
   doAjaxCmd (
   {
-    cmd: "do-repl",
-    code: b,
-    sess: replSession
+    cmd:   "do-repl",
+    code:  b,
+    sname: replSessionName
   });
 
 }
@@ -511,12 +518,13 @@ function initEditor() {
     });
 
   replOut.setValue("");
-  replIn.setValue(clojScript);
+  //replIn.setValue(clojScript);
+  replIn.setValue("");
 
   // initial state of history - clojScript is already in
   // so Ctrl-Down will produce blank screen
-  replHist[0] = clojScript;
-  nextHistNdx = 1;
+  //replHist[0] = clojScript;
+  nextHistNdx = 0;
   ndxHist = 0;
 
   CodeMirror.keyMap.default["Ctrl-Enter"] = replSubmit;
@@ -531,8 +539,8 @@ function initEditor() {
 function clickGetMonData() {
   doAjaxCmd(
     {
-      cmd: "get-mon-data",
-      sess: replSession
+      cmd:   "get-mon-data",
+      sname: replSessionName
     });
 }
 
@@ -645,8 +653,8 @@ function respDoRepl(code, jdata) {
       continue;
     if ("out" in val) {
       var text = val["out"];
-      s += text;
       replPrinter.print("out", text);
+      s += text;
     }
     if ("ns" in val) {  // ask for ns befotr value
       var text = val["ns"] +"=>";
@@ -696,7 +704,7 @@ function doAjaxCmd(request) {
     var cmd = request["cmd"];
     switch (cmd) {
       case "get-mon-data":
-        jsonToTable(jdata);
+        jsonToDataTree(jdata);
         break;
       case "do-jvm-gc":
         $("#dojvmgc").attr("disabled", false); // re-enable button on cmd ack
@@ -711,6 +719,9 @@ function doAjaxCmd(request) {
       case "chat-send":
         $("#sendmsg").attr("disabled", false);
         clickGetMonData(); // refresh monitoring data
+        break;
+      case "gen-invite":
+        handleInviteResponse(jdata);
         break;
     }
   }
@@ -796,7 +807,7 @@ function attachHideHandler (id) {
       annSetHidden(annMonData, name, false);
     else
       annSetHidden(annMonData, name,  true);
-    jsonToTable(annMonData);
+    jsonToDataTree(annMonData);
   });
 }
 
@@ -919,12 +930,17 @@ function makeTree(jdata, ident) {
     if (name == "_config") {
       var val = jdata[name];
       validateConfig(val);
-      continue;         // skip config
+      continue;         // skip __config
     }
     if (name == "_chatMsg") {
       var val = jdata[name];
       handleChatMsg(val);
-      continue;         // skip chatMsg
+      continue;         // skip __chatMsg
+    }
+    if (name == "_replBuf") {
+      var val = jdata[name];
+      handleReplBufMsg(val); // remote repl buffer update
+      continue;         // skip __replBuf
     }
     if (name == "ReplSessions") {
       var val = jdata[name];
@@ -994,7 +1010,7 @@ function annotateJson(fresh, ann) {
   }
 }
 
-function jsonToTable(jdata) {
+function jsonToDataTree(jdata) {
   annotateJson(jdata, annMonData); // update annotated data
                                    // preserving hidden field markers, if any
 
@@ -1003,6 +1019,133 @@ function jsonToTable(jdata) {
     $("#dataTree").empty();
     $("#dataTree").append(s);
     attachHideHandler("hide");
+  }
+}
+
+var invite=
+"<p>" +
+"Please enter the name of the person you want to invite to discuss "+
+"the Clojure code snippet/selection that you currently in have in " +
+"your REPL input window. The invite URL will be generated in the " +
+"REPL output window." + "</p>" +
+"The URL will be associated with the invited party name. " +
+"Ideally you will want to use their IRC nick. " +
+"The invitation URL can be passed on by any Internet communication channel "+
+"such as IRC, tweet or an e-mail, IRC being the most convenient. " +
+"When the invitee eventually connects to the URL supplied, the system will try to"+
+" assign them internal chat nick identical to the name you originally specified "+
+"if possible, otherwise a close approximation will be generated by adding "+
+"a numerical suffix. " + "</p>" +
+"If an invitation is passed via IRC, more than one person may respond. "+
+"This is OK, they will all eventually accept their given nicks or change "+
+"them to something  more appropriate. When the invited person(s) respond, "+
+"they will be presented with the replica of the contents of your input "+
+"REPL window at the time the invitation was generated. Then they can review the" +
+" code snippet, possibly try to run it and provide the feedback, either "+
+"through internal chat facility or through #clojure or some " +
+"other IRC channel. " + "</p>" +
+"If revised code fragments are to be passed back and forth "+
+"it is probably better to use the internal chat." +
+"<p>This feature is not ready yet.</p>"+ 
+"</p> Invitee's name: " ;
+
+var templateHtml=
+    invite            +
+  "<input       "     +
+  'type="text"'       +
+  ' id="invite-nick">'+
+  "</input>";
+
+
+function handleInviteResponse (jdata) {
+  var url  = jdata["url"];
+  var name = jdata["name"];
+
+  var s = "The invitation URL for " + name +" is: " + url;
+  replPrinter.print("code", s);
+  replPrinter.flush();
+}
+
+function sendInvite(e, name) {
+  if (e != replIn)
+    return false;
+  var b = e.getValue();
+  var s = e.getSelection();
+  b = rtrim(b);
+  s = rtrim(s);
+
+  if (s == "") {
+    if (b == "")
+      return false;
+  }
+  else
+    b = s;
+
+  // b is not empty, send it
+  doAjaxCmd (
+  {
+    cmd:   "gen-invite",
+    msg:   b,
+    from:  myChatNick,
+    to:    name.substring(0,15),
+    sname: replSessionName
+  });
+  return true;
+}
+
+function cback (name) {
+  name = trim(name);
+  if (name != "") {
+    var ok = sendInvite(replIn, name);
+    if (!ok)
+      replPrinter.print("code",
+        "Nothing found to be to sent, no invite generated.");
+  }
+}
+
+function clickInvite() {
+  var name = replOut.openDialog(templateHtml, cback);
+}
+
+function handleReplBufMsg(m) { // remote repl input bufer update
+
+ 
+  m = rtrim(m);                // either invite or initial setup
+  if (m == "")
+    return;
+   console.log("got "+m);
+  // m is the new contents of input buffer
+  var e = replIn;
+  var b = rtrim(e.getValue());
+  e.setValue("");
+  if (b != m && b != "") {
+    // save existing content in history
+    replHist [nextHistNdx++] = b;
+    ndxHist = nextHistNdx; // history pointer past freshest item
+    if (ndxHist > 1) {
+      if (replHist[ndxHist-1] == replHist[ndxHist-2]) {
+        // do not polute history with the same buffer values
+        ndxHist--;
+        nextHistNdx--;
+      }
+    }
+    replPrinter.print("code",
+      "WARNING: Your current buffer has been moved to history, "+
+      "to make room for the incomming message,\npossibly an invite "+
+      "or the result "+
+      "of the server app restart. Recall the buffer back with Ctrl-Up.");
+    replPrinter.flush();
+    console.log ("WARN");
+  }
+  appendBuffer(e,m);
+  replHist [nextHistNdx++] = m;
+  ndxHist = nextHistNdx; // history pointer past freshest item
+  if (ndxHist > 1) {
+    if (replHist[ndxHist-1] == replHist[ndxHist-2]) {
+      // do not polute history with the same buffer values
+      ndxHist--;
+      nextHistNdx--;
+    }
   }
 }
 

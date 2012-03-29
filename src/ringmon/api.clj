@@ -19,7 +19,7 @@
     (repl/session-get-nick sid)))
 
 (defn chat-nicks
- "Get vector of all active nicks."
+ "Get set of all active nicks."
   []
   (repl/chat-nicks))
 
