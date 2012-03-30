@@ -1,12 +1,12 @@
-# Jedit backup files
-*~
+#Marginalia
+/docs/
+#lein 2.0
+/target/
+# lein 1.x
 pom.xml
 *jar
-/target/
-# old lein compatibility
 /lib/
-/docs/
 /classes/
 .lein-deps-sum
 .lein-failures
-.DS_Store
+
