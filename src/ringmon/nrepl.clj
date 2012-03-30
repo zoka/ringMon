@@ -6,7 +6,7 @@
             [clojure.string                :as string]
             [ringmon.cookies               :as cookies]
             [clojure.tools.nrepl.misc      :as repl.misc]
-            [ringmon.json                  :as json]
+            [cheshire.core                 :as json]
             (clojure walk))
   (:import  (clojure.tools.nrepl.transport FnTransport)
             (java.util.concurrent LinkedBlockingQueue TimeUnit)

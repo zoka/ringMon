@@ -79,7 +79,6 @@
   or configuration map with amended values.
   Returns true if succesful."
   [cfg]
-  (println "[ringMon server] starting with:" cfg)
   (when (or (nil? cfg) (map? cfg))
     (swap! loc-cfg merge cfg)
     (let [port        (get-port)
@@ -87,6 +86,7 @@
           http-server (get-http-server-start-fn)]
       (when (and http-server port handler)
         (monitor/merge-cfg @loc-cfg)
+        (println "[ringMon server] starting with:" @loc-cfg)
         (future
           (http-server handler {:port port}))
         (when (:local-repl @loc-cfg)
@@ -99,7 +99,7 @@
 
 (defn cfg->map
  [cfg]
- "Converts list cfg pars in k/v strings form into Clojure map"
+ "Convert list of cfg pars in k/v strings form into a Clojure map"
   (if-not cfg
     {}
     (let [p (reduce #(str %1 " " %2) cfg)

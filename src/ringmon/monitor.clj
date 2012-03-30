@@ -1,7 +1,7 @@
 (ns ringmon.monitor
   (:require
     [clojure.string            :as string]
-    [ringmon.json              :as json]
+    [cheshire.core             :as json]
     [ring.middleware.resource  :as res]
     [ring.middleware.params    :as param]
     [ring.middleware.file-info :as finfo]
