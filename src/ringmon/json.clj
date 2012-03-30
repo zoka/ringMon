@@ -1,17 +1,18 @@
 ;
 ;  All in one JSON parser using only one dependency:
-;  [org.codehaus.jackson/jackson-core-asl "1.5.0"]
+;  [com.fasterxml.jackson.core/jackson-core "2.0.0"]
 ;  Providing only  generate-string and parse-string
 ;  Cherry picked from Cheshire.
 
 (ns ringmon.json
  (:import
-   (org.codehaus.jackson
+   (com.fasterxml.jackson.core
     JsonParser
     JsonFactory
     JsonToken
     JsonGenerator
     JsonParser$Feature
+    JsonFactory$Feature
     JsonGenerationException)
    (java.io StringWriter StringReader)
    (java.util Date Map List Set SimpleTimeZone UUID)
@@ -112,9 +113,9 @@
                   (boolean (:allow-single-quotes opts)))
       (.configure JsonParser$Feature/ALLOW_UNQUOTED_CONTROL_CHARS
                   (boolean (:allow-unquoted-control-chars opts)))
-      (.configure JsonParser$Feature/INTERN_FIELD_NAMES
+      (.configure JsonFactory$Feature/INTERN_FIELD_NAMES
                   (boolean (:intern-field-names opts)))
-      (.configure JsonParser$Feature/CANONICALIZE_FIELD_NAMES
+      (.configure JsonFactory$Feature/CANONICALIZE_FIELD_NAMES
                   (boolean (:canonicalize-field-names opts))))))
 
 (defonce ^JsonFactory json-factory (make-json-factory default-factory-options))

@@ -3,7 +3,7 @@
   :url "https://github.com/zoka/ringMon"
   :dependencies [[org.clojure/clojure "1.3.0"]
                 [ring/ring-core "1.0.1"]
-                [org.codehaus.jackson/jackson-core-asl "1.5.0"]
+                [com.fasterxml.jackson.core/jackson-core "2.0.0"]
                 [org.clojure/tools.nrepl "0.2.0-beta2"]
                 [org.clojure/java.jmx "0.1"]]
 
