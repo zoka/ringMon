@@ -6,9 +6,10 @@
     [ring.middleware.params    :as param]
     [ring.middleware.file-info :as finfo]
     [ring.util.response        :as response]
+    [clojure.java.jmx          :as jmx]
     [ringmon.nrepl             :as repl]
     [ringmon.cookies           :as cookies]
-    [clojure.java.jmx          :as jmx]))
+    [ringmon.security          :as sec]))
 
 (def tmancy "◔_◔")
 
@@ -173,11 +174,11 @@
 
 (defn gen-invite
   [sname to from msg sid client-ip]
-  (let [[name invite-pars] 
+  (let [[name invite-pars]
          (repl/register-invite sname to from msg client-ip)]
     { :resp "ok"
       :name name
-      :url 
+      :url
        (str @ringmon-host-url
             "/ringmon/monview.html"
             invite-pars)}))
@@ -209,20 +210,20 @@
         sname (:sname params)]
     (swap! ajax-reqs-tot inc)
     (case cmd
-      :get-mon-data  
+      :get-mon-data
         (get-mon-data sname client-ip ring-sess)
-      :do-jvm-gc     
+      :do-jvm-gc
         (do-jvm-gc)
-      :do-repl       
+      :do-repl
         (repl/submit-form sname (:code params) client-ip ring-sess )
-      :repl-break    
+      :repl-break
         (repl/break sname client-ip ring-sess)
-      :send-chat     
+      :send-chat
         (send-chat sname (:msg params) (:to params) client-ip ring-sess)
-      :set-chat-nick 
+      :set-chat-nick
         (set-chat-nick sname (:nick params) client-ip ring-sess)
       :gen-invite
-        (gen-invite sname (:to params) (:from params) (:msg params) 
+        (gen-invite sname (:to params) (:from params) (:msg params)
                            client-ip ring-sess)
       {:resp "bad-cmd"})))
 
@@ -246,35 +247,36 @@
       (= uri "/ringmon/monview.html")))
 
 (defn ringmon-allowed?
-  [req]
-  (if (:disabled @the-cfg)
-    (if-let [auth-fn (:auth-fn @the-cfg)]
-      (if (fn? auth-fn)
-        (auth-fn req)
+  [req client-ip]
+  (when (sec/check-ip client-ip)
+    (if (:disabled @the-cfg)
+      (if-let [auth-fn (:auth-fn @the-cfg)]
+        (if (fn? auth-fn)
+          (auth-fn req)
+          nil)
         nil)
-      nil)
-    true))
+      true)))
 
 (defn wrap-ajax
   [handler]
   (fn [req]
     (let [uri (:uri req)]
       (if (ringmon-req? uri)
-        (if (ringmon-allowed? req)
-          (let [params (clojure.walk/keywordize-keys (:query-params req))
-                client-ip (get-client-ip req)
-                ring-sess (get
-                            (get 
-                              (:cookies req) "ring-session") :value)]
-            (when-not @ringmon-host-url
-              (reset! ringmon-host-url (get-host-url req)))
-            (if (= uri "/ringmon/command")
-              (response/response (ajax params client-ip ring-sess))
-              (do
-                (when params
-                  (check-for-invite params ring-sess))
-                (handler req))))
-          (response/response "Not allowed"))
+        (let [client-ip (get-client-ip req)]
+          (if (ringmon-allowed? req client-ip)
+            (let [params (clojure.walk/keywordize-keys (:query-params req))
+                  ring-sess (get
+                              (get
+                                (:cookies req) "ring-session") :value)]
+              (when-not @ringmon-host-url
+                (reset! ringmon-host-url (get-host-url req)))
+              (if (= uri "/ringmon/command")
+                (response/response (ajax params client-ip ring-sess))
+                (do
+                  (when params
+                    (check-for-invite params ring-sess))
+                  (handler req))))
+            (response/response "Not allowed")))
         (handler req)))))
 
 (defn wrap-pass-through
