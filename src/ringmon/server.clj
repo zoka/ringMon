@@ -6,7 +6,7 @@
   (:import (java.net Socket ServerSocket URI)
            (java.awt Desktop)))
 
-(defn default [req]
+(defn- default [req]
   (resp/redirect "/ringmon/monview.html"))
 
 (def handler
@@ -24,7 +24,7 @@
   :ring-handler handler ; simple handler redirect to ringMon page
   :http-server  nil}))  ; will be Jetty if not set
 
-(defn open-browser-window
+(defn- open-browser-window
   "Open the default desktop browser window with target uri"
   [target]
   (let [sup (Desktop/isDesktopSupported)]
@@ -39,7 +39,7 @@
             (catch Exception e
               (println "Could not browse to" target "\n" e))))))))
 
-(defn port-avaliable?
+(defn- port-avaliable?
  "Check if TCP port is available."
   [port]
   (try
@@ -49,7 +49,7 @@
       (catch Exception e
         (println "Port" port "is not available."))))
 
-(defn get-port
+(defn- get-port
  "Get suitable port for http server, either autoselected or
   precofigured."
   []
@@ -65,7 +65,7 @@
       port
       nil)))
 
-(defn get-http-server-start-fn
+(defn- get-http-server-start-fn
   []
   (require 'ring.adapter.jetty)
   (if-not (:http-server @loc-cfg)
@@ -97,32 +97,34 @@
             "/ringmon/monview.html")))
         true))))
 
-(defn cfg->map
- [cfg]
- "Convert list of cfg pars in k/v strings form into a Clojure map"
+(defn- cfg->map
+  [cfg]
+ "Convert list of cfg pairs in keyword/value strings  
+  form into a Clojure map."
   (if-not cfg
     {}
     (let [p (reduce #(str %1 " " %2) cfg)
           s (str "{" p "}")]
       (try
         (let [cfg (read-string s)]
-          (if-not (map? cfg)
-            {}
-            cfg))
+         (if-not (map? cfg)
+           {}
+           cfg))
         (catch Exception e
-          (println "Exception:" e)
-          (Thread/sleep 100)
-          nil)))))   ; let the exception print out in peace
+          (println "Exception while parsing command line:\n" e)
+          (Thread/sleep 100) ; let the exception print out in peace
+          nil)))))
 
 (defn -main
  "Command line invocation for standalone mode - to be
-  invoked with 'lein run'. Relies on
-  'ring/ring-jetty-adapter' being in development dependencies.
-  Expects either no parameters, or sequence of keyword/value
+  invoked with 'lein run'. Relies on 'ring/ring-jetty-adapter'
+  being at least in development dependencies. 
+  Expects either no parameters, or a sequence of keyword/value 
   pairs. For example:
-  lein run -m ringmon.server :port 10000 :local-repl true
-  This will start the dedicated http-server on port 10000 and
-  autostart the browser at the REPL interface page."
+  lein run -m ringmon.server :port 9999 :local-repl true
+  This will start a dedicated Jetty http-server on port 9999
+  and create a fresh web browser window with ringMon's 
+  nREPL interface page loaded."
   [& cfg-pars]
   (let [cfg (cfg->map cfg-pars)]
     (if-not cfg
@@ -132,9 +134,6 @@
     (let [ok (start cfg)]
       (print "The standalone ringMon ")
         (if ok
-          (println (str "up and running using port "
+          (println (str "is up and running using port "
                      (:port @loc-cfg)"."))
-          (println "failed to start."))))))
-
-
-
+          (println "has failed to start."))))))

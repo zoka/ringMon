@@ -42,52 +42,49 @@
    :auth-fn    nil}))   ; authorisation callback, checked only if :disabled is true
                         ; will be passed a Ring request, return true if Ok
 
-(def cpu-load      (atom 0.0))
-(def ajax-reqs-ps  (atom 0.0))   ; ajax requests per second
-(def ajax-reqs-tot (atom 0))     ; total requests
+(def cpu-load      (atom 0.0))     ; CPU load  (2 seconds average)
+(def ajax-reqs-ps  (atom 0.0))     ; ajax requests per second
+(def ajax-reqs-tot (atom 0))       ; total requests
 (def ^:const sample-interval 2000) ; msec
 
-(defn get-process-nanos
+(defn- get-process-nanos
   []
   (jmx/read "java.lang:type=OperatingSystem" :ProcessCpuTime))
 
-(defn calc-cpu-load
+(defn- calc-cpu-load
   [cpu-time clock-time]
   (/ (* 100.0 cpu-time) clock-time))
 
-(defn data-sampler
+(defn- data-sampler
   []
-
   (loop [process-nanos     (get-process-nanos)
          real-nanos        (System/nanoTime)
          ajax-reqs         @ajax-reqs-tot
          old-process-nanos 0
          old-real-nanos    0
          old-ajax-reqs     0]
-
-         (Thread/sleep sample-interval)
-         (reset! cpu-load
-                 (calc-cpu-load
-                   (- process-nanos old-process-nanos)
-                   (- real-nanos old-real-nanos)))
-
-         (reset! ajax-reqs-ps
-                 (/ (- ajax-reqs old-ajax-reqs) 2.0))
-         (repl/check-sessions) ; sessions house-keeping
-         (recur (get-process-nanos)
-                (System/nanoTime)
-                @ajax-reqs-tot
-                process-nanos
-                real-nanos
-                ajax-reqs)))
+    (Thread/sleep sample-interval)
+    (reset! cpu-load
+            (calc-cpu-load
+              (- process-nanos old-process-nanos)
+              (- real-nanos old-real-nanos)))
+    (reset! ajax-reqs-ps
+            (/ (- ajax-reqs old-ajax-reqs) 2.0))
+    (repl/check-sessions) ; sessions house-keeping
+    (recur (get-process-nanos)
+           (System/nanoTime)
+           @ajax-reqs-tot
+           process-nanos
+           real-nanos
+           ajax-reqs)))
 
 ; based on https://github.com/mikejs/ring-gzip-middleware.git
 ; just converted to use clojure.java.io from Clojure 1.3
-(defn gzipped-response
+(defn- gzipped-response
   [resp]
   (let [body (resp :body)
         bout (java.io.ByteArrayOutputStream.)
-        out (java.util.zip.GZIPOutputStream. bout)
+        out  (java.util.zip.GZIPOutputStream. bout)
         resp (assoc-in resp [:headers "content-encoding"] "gzip")]
     (clojure.java.io/copy body out)
     (.close out)
@@ -95,7 +92,7 @@
       (.close body))
     (assoc resp :body (java.io.ByteArrayInputStream. (.toByteArray bout)))))
 
-(defn wrap-gzip
+(defn- wrap-gzip
   [handler]
   (fn [req]
     (let [{body :body
@@ -115,18 +112,19 @@
             resp))
         resp))))
 
-(defn extract-config
+(defn- extract-config
+ "Extract browser relevant configuration data from @the-cfg."
   []
   (select-keys @the-cfg [:fast-poll
                          :norm-poll
                          :parent-url
                          :lein-webrepl]))
 
-;; Can't serialize JMX entries without this
+;; Can't serialize JMX entries without this on OpenJDK7
 (defn- object-name-str [x]
   (update-in x [:ObjectName] str))
 
-(defn get-mon-data
+(defn- get-mon-data
   [sname client-ip ring-sess]
   (let [os  (jmx/mbean "java.lang:type=OperatingSystem")
         mem (jmx/mbean "java.lang:type=Memory")
@@ -155,24 +153,24 @@
          :_chatMsg         msg
          :_config          (extract-config)}))
 
-(defn do-jvm-gc
+(defn- do-jvm-gc
   []
   (jmx/invoke "java.lang:type=Memory" :gc)
   {:resp "ok"})
 
-(defn send-chat
+(defn- send-chat
   [sname msg to client-ip ring-sess]
   (repl/send-chat-msg sname msg to client-ip ring-sess )
   {:resp "ok"})
 
-(defn set-chat-nick
+(defn- set-chat-nick
   [sname nick client-ip ring-sess]
   (let [old-nick (repl/set-chat-nick sname nick client-ip ring-sess)]
     {:resp "ok" :old-nick old-nick}))
 
 (def ringmon-host-url (atom nil))
 
-(defn gen-invite
+(defn- gen-invite
   [sname to from msg sid client-ip]
   (let [[name invite-pars]
          (repl/register-invite sname to from msg client-ip)]
@@ -183,26 +181,36 @@
             "/ringmon/monview.html"
             invite-pars)}))
 
-(defn check-for-invite
-  [params ring-sess]
-  )
+(defn- check-for-invite
+  [params ring-sess])
 
-(defn get-host-url
+(defn- get-host-url
+ "Extract host URK from Ring request."
   [req]
   (let [srv  (:server-name req)
         port (:server-port req)
         tp   (name(:scheme req))]
-    (str tp "://" srv ":" port)))
+    (when (= tp "http")
+      (if (= port 80)           
+        (str tp "://" srv) ; port 80 is default
+	(str tp "://" srv ":" port)))
+    (when (= tp "https")
+      (if (= port 443)           
+        (str tp "://" srv) ; port 443 is default
+	(str tp "://" srv ":" port)))))
 
-(defn init-module
+(defn- init-module
+ "Called upon first AJAX request."
   []
   (.start (Thread. data-sampler))
   (repl/set-mirror-cfg @the-cfg)
   (repl/parse-lein-project))
 
-(def sampler-started    (atom 0))
+(def ^{:doc "Flag to nake sure that init-module is called only once at the start."}
+ sampler-started    (atom 0))
 
-(defn decode-cmd
+(defn- decode-cmd
+ "Command dispatcher."
   [params client-ip ring-sess]
   (when (compare-and-set! sampler-started 0 1)
     (init-module))
@@ -227,13 +235,14 @@
                            client-ip ring-sess)
       {:resp "bad-cmd"})))
 
-(defn ajax
+(defn- ajax
+ "AJAX processor of client commands. Returns a JSON data response."
   [params client-ip ring-sess]
   (let [reply    (decode-cmd params client-ip ring-sess)
         j-reply  (json/generate-string reply)]
     j-reply))
 
-(defn get-client-ip
+(defn- get-client-ip
   [req]
   (let [hdrs  (:headers req)
         xfwd  (get hdrs "x-forwarded-for")]
@@ -241,12 +250,15 @@
       (first (string/split xfwd #","))
       (:remote-addr req))))
 
-(defn ringmon-req?
+(defn- ringmon-req?
+ "Check if URI refers to ringMon stuff."
   [uri]
   (or (= uri "/ringmon/command")
       (= uri "/ringmon/monview.html")))
 
-(defn ringmon-allowed?
+(defn- ringmon-allowed?
+"Performs 2 level of security checking. First by white/black  set filter,
+ and then by using autorisation callback, if required."
   [req client-ip]
   (when (sec/check-ip client-ip)
     (if (:disabled @the-cfg)
@@ -257,14 +269,14 @@
         nil)
       true)))
 
-(defn wrap-ajax
+(defn- wrap-ajax
   [handler]
   (fn [req]
     (let [uri (:uri req)]
       (if (ringmon-req? uri)
         (let [client-ip (get-client-ip req)]
           (if (ringmon-allowed? req client-ip)
-            (let [params (clojure.walk/keywordize-keys (:query-params req))
+            (let [params    (clojure.walk/keywordize-keys (:query-params req))
                   ring-sess (get
                               (get
                                 (:cookies req) "ring-session") :value)]
@@ -279,7 +291,7 @@
             (response/response "Not allowed")))
         (handler req)))))
 
-(defn wrap-pass-through
+(defn- wrap-pass-through
   [handler]
   (fn [req]
     (let [uri (:uri req)]
@@ -295,7 +307,6 @@
   (if (:local-repl @the-cfg)
     (-> handler
         (wrap-pass-through))
-
     (-> handler
         (res/wrap-resource "public")
         (finfo/wrap-file-info)

@@ -32,7 +32,7 @@
        v
        default))))
 
-(defn noir-cookies [handler]
+(defn- noir-cookies [handler]
   (fn [request]
     (binding [*cur-cookies* (:cookies request)
               *new-cookies* (atom {})]

@@ -1,4 +1,5 @@
 (ns ringmon.nrepl
+ "nREPL trasport, session management, chat facility,"
   (:require [clojure.tools.nrepl.server    :as server]
             [clojure.tools.nrepl.misc      :as misc]
             [clojure.tools.nrepl.transport :as t]
@@ -56,7 +57,7 @@
      ;(println "clnt-> patched:" p)
     p))
 
-(defn transport-pair
+(defn- transport-pair
  "Returns vector of 2 direct transport instances,
   first one for client, and second one for server.
   This construct looks very mush like two ends od
@@ -117,9 +118,9 @@
   [client-transport server-transport]))
 
 (defn- connect
-  "Connects to nREPL server within the same procees using
+  "Connect to nREPL server within the same procees using
    the pair of LinkedBlockedQueue instances.
-   There is no real server here, just a
+   Actually, there is no real server here, just a
    future that handles one to one connection.
    Returns client transport instance."
   []
@@ -252,8 +253,9 @@
   last-req-time  ; last data request time [ms]
   last-cmd-time  ; last command time [ms]
   total-ops      ; total ops (reqs+commands)
-  top-msg        ; top window message to append
-  bot-buf]       ; bottom window whole buffer to replace
+  top-msg        ; top window message(s) to append on the next poll
+  bot-buf-q]     ; bottom window buffer updates queue in form of
+                 ; {:type t :buf b}. The head of queue to be 
   SessionStats
   (get-stats [this sid]
     (let [now (System/currentTimeMillis)
@@ -271,7 +273,7 @@
   sessions (ref {}))
 
 (def ^{:doc "Map of pending invite ids to Invite records."}
-  records (ref {}))
+  invites (ref {}))
 
 (def ^{:doc "Calculated by check-sessions every 2 seconds."}
   active-session-count (atom {}))
@@ -284,7 +286,7 @@
 
 (defn- get-active-sess-count
  "Return the number of active sessions. A session is considered active
-  if client is issued at least one data request in the last 10 seconds."
+  if client has issued at least one data request in the last 10 seconds."
   []
   @active-session-count)
 

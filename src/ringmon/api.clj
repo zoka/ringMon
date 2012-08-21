@@ -1,10 +1,9 @@
 (ns ringmon.api
+ "User level nREPL scripts should call only ringMon functions from this namespace
+  to insure backwards compatibility." 
   (:require
     [ringmon.nrepl    :as repl]
     [ringmon.monitor  :as mon]))
-
-"User nREPL scripts should call only ringMon functions from this namespace
- to insure backwards compatibility"
 
 (defn set-nick
  "Change your chat nick. Return the old one if succesful, nil otherwise."
