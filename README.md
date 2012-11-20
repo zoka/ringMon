@@ -55,7 +55,7 @@ The reply travels all the way back in reverse order. The nREPL provides
 You can see ringMon in action in
 [this](https://github.com/zoka/noirMon)
 showcase Noir application deployed
-at [Heroku](http://noirmon.herokuapp.com/).
+at [Heroku](http://webrepl.herokuapp.com/).
 
 ## Chat facility
 
