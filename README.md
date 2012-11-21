@@ -7,7 +7,7 @@ library or on higher level web frameworks such as
 [Noir](https://github.com/ibdknox/noir)
 or
 [Compojure](https://github.com/weavejester/compojure).
-It is also easily added as a dev dependency to any Clojure applications
+It is also easily added as a dev dependency to any Clojure application
 as well. Actually, it could be incorporated into any JVM (non-Clojure) application
 with bit more work - planned for later.
 
