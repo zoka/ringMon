@@ -1,6 +1,6 @@
 # ringMon
 
-A Ring middleware that injects single monitoring page into a Clojure
+A Ring middleware that injects single monitoring web page into a Clojure
 web application based on
 [Ring]( https://github.com/mmcgrana/ring)
 library or on higher level web frameworks such as
