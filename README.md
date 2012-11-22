@@ -11,7 +11,7 @@ It is also easily added as a dev dependency to any Clojure application
 as well. Actually, it could be incorporated into any JVM (non-Clojure) application
 with bit more work - planned for later.
 
-The page displays raw JMX data of interest in tree alike structure.
+The page displays raw JMX data of interest in a tree like structure.
 It also shows
 derived values such as CPU load that is calculated by
 sampling JMX property OperatingSystem.ProcessCpuTime every
