@@ -27,7 +27,7 @@ mechanism to prevent unathorised access. There is a pluggable authenication
 function that will be called upon every AJAX command or ringMon page
 request. The function is passed the pending Ring request map, in order
 to decide  whether to accept it or reject it.
-Simple authentication mechanism woukd be to have white list of IP addresses
+Simple authentication mechanism would be to have white list of IP addresses
 allowed.
 
 ringMon can be very useful to provide nREPL access
