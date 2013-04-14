@@ -41,5 +41,4 @@
 
 (defn wrap-noir-cookies [handler]
   (-> handler
-    (noir-cookies)
-    (wrap-cookies)))
+    (noir-cookies)))
