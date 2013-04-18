@@ -596,7 +596,7 @@
             :total-ops (inc tops))))))
     (poll s)))
 
-(def ^:const session-age (str (* 3600 24 30)))
+(def ^:const session-age (* 3600 24 30)) ; one month
 
 (defn- get-active-browser-sessions
   []
