@@ -254,8 +254,8 @@
   last-cmd-time  ; last command time [ms]
   total-ops      ; total ops (reqs+commands)
   top-msg        ; top window message(s) to append on the next poll
-  bot-buf-q]     ; bottom window buffer updates queue in form of
-                 ; {:type t :buf b}. The head of queue to be 
+  bot-buf]       ; bottom window buffer 
+  
   SessionStats
   (get-stats [this sid]
     (let [now (System/currentTimeMillis)
@@ -486,7 +486,7 @@
 
 (def date-format (SimpleDateFormat. "HH:mm:ss"))
 (defn time-now
- "Return time of the dat in above format."
+ "Return time of the day in above format."
   []
   (.format date-format (Date.)))
 
